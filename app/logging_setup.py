@@ -47,7 +47,7 @@ PRIVATE_KEYS = {
 _PATTERNS = [
     (re.compile(r"sk-ant-[A-Za-z0-9_\-]{8,}"), "[redacted-api-key]"),
     (re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-]{8,}"), "Bearer [redacted]"),
-    (re.compile(r"(?i)\b(bc_session|session|token|password|secret|api[_-]?key)=([^\s;&,]+)"), r"\1=[redacted]"),
+    (re.compile(r"(?i)\b([A-Za-z_]*session|token|password|secret|api[_-]?key)=([^\s;&,]+)"), r"\1=[redacted]"),
 ]
 _MAX_STR = 500
 

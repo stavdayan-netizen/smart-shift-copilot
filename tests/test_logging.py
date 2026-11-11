@@ -22,10 +22,10 @@ def test_log_line_is_json_with_required_fields(log_lines):
 def test_redact_removes_credentials_and_reduces_private_text():
     out = redact({"password": "x", "Authorization": "Bearer abcdefghijkl", "api_key": "sk-ant-abcdefgh1234",
                   "message": PRIVATE_TEXT, "free_text": PRIVATE_TEXT, "user_id": 3,
-                  "nested": {"session_token": "abc", "items": [{"cookie": "bc_session=zzz"}]},
-                  "other": "key sk-ant-abcdefghijk leaked", "where": "cookie bc_session=abcdef123456 here"})
+                  "nested": {"session_token": "abc", "items": [{"cookie": "shift_session=zzz"}]},
+                  "other": "key sk-ant-abcdefghijk leaked", "where": "cookie shift_session=abcdef123456 here"})
     dumped = json.dumps(out)
-    for needle in ("Bearer abcdefghijkl", "sk-ant-abcdefg", "mother-in-law", "bc_session=zzz", "abcdef123456"):
+    for needle in ("Bearer abcdefghijkl", "sk-ant-abcdefg", "mother-in-law", "shift_session=zzz", "abcdef123456"):
         assert needle not in dumped
     assert out["password"] == "[redacted]" and out["user_id"] == 3
     assert out["message"].startswith("[private len=")
@@ -87,20 +87,20 @@ def test_events_inside_a_request_share_its_request_id(client, logged_in, fake, l
 
 def test_secrets_and_private_text_never_reach_the_logs(client, fake, log_lines):
     client.cookies.clear()
-    bad = client.post("/api/login", json={"name": "Tester", "password": SECRET_PASSWORD})
+    bad = client.post("/api/login", json={"name": "boss", "code": SECRET_PASSWORD})
     assert bad.status_code == 401
-    good = client.post("/api/login", json={"name": "Tester", "password": "test-pass"})
+    good = client.post("/api/login", json={"name": "boss", "code": "test-manager-password"})
     assert good.status_code == 200
-    token = client.cookies.get("bc_session")
+    token = client.cookies.get("shift_session")
     assert token
     client.post("/api/chat", json={"message": PRIVATE_TEXT})
     client.get("/api/conversations")
     raw = log_lines.raw()
-    assert SECRET_PASSWORD not in raw and "test-pass" not in raw
+    assert SECRET_PASSWORD not in raw and "test-manager-password" not in raw
     assert token not in raw and "test-secret-0123456789abcdef" not in raw
     assert "mother-in-law" not in raw and "Rivka" not in raw and PRIVATE_TEXT not in raw
     failed = log_lines.events("auth_failed")[0]
-    assert failed["reason"] == "bad_password" and failed["level"] == "warning"
+    assert failed["reason"] == "bad_credentials" and failed["level"] == "warning"
     assert log_lines.events("copilot_request")[-1]["message_len"] == len(PRIVATE_TEXT)
 
 

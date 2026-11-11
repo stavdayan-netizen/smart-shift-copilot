@@ -60,7 +60,10 @@ PRICES_PER_MTOK: dict[str, dict[str, float]] = {
 
 @dataclass(frozen=True)
 class Settings:
-    app_password: str
+    manager_name: str
+    manager_password: str | None
+    client_ip_header: str | None
+    allowed_origins: str | None
     app_secret: str
     database_url: str
     anthropic_api_key: str | None
@@ -91,15 +94,22 @@ def load_settings() -> Settings:
     provider = _env("MODEL_PROVIDER", "anthropic")
     api_key = _env("ANTHROPIC_API_KEY")
     environment = _env("APP_ENV", "local")
-    app_password = _env("APP_PASSWORD")
+    manager_password = _env("MANAGER_PASSWORD")
     app_secret = _env("APP_SECRET")
 
     if environment == "production":
-        missing = [n for n, v in (("APP_PASSWORD", app_password), ("APP_SECRET", app_secret)) if not v]
+        missing = [n for n, v in (("MANAGER_PASSWORD", manager_password), ("APP_SECRET", app_secret)) if not v]
         if provider == "anthropic" and not api_key:
             missing.append("ANTHROPIC_API_KEY")
         if missing:
             raise RuntimeError(f"Missing required variables in production: {', '.join(missing)}")
+        weak = []
+        if manager_password and len(manager_password) < 12:
+            weak.append("MANAGER_PASSWORD must be at least 12 characters")
+        if app_secret and len(app_secret) < 32:
+            weak.append("APP_SECRET must be at least 32 characters")
+        if weak:
+            raise RuntimeError("Weak secrets in production: " + "; ".join(weak))
 
     database_url = _env("DATABASE_URL", "sqlite:///./local.db")
     # Railway's Postgres plugin hands out postgresql:// URLs; SQLAlchemy needs the driver name.
@@ -109,7 +119,10 @@ def load_settings() -> Settings:
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
     return Settings(
-        app_password=app_password or "change-me",
+        manager_name=" ".join((_env("MANAGER_NAME", "manager") or "manager").split()),
+        manager_password=manager_password,
+        allowed_origins=_env("ALLOWED_ORIGINS"),
+        client_ip_header=(_env("CLIENT_IP_HEADER") or "").strip().lower() or None,
         app_secret=app_secret or secrets.token_hex(32),
         database_url=database_url,
         anthropic_api_key=api_key,
@@ -123,7 +136,7 @@ def load_settings() -> Settings:
         digest_webhook_url=_env("DIGEST_WEBHOOK_URL"),
         timezone=_env("TIMEZONE", "Asia/Jerusalem"),
         model_provider=provider,
-        session_hours=int(_env("SESSION_HOURS", "72")),
+        session_hours=int(_env("SESSION_HOURS", "24")),
         environment=environment,
         log_level=(_env("LOG_LEVEL", "INFO") or "INFO").upper(),
     )

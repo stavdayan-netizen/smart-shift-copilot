@@ -16,8 +16,18 @@ Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/esc
 ## 3. PostgreSQL connectivity [EXISTS; log events PLANNED]
 - **Symptoms:** `/health` 503 with `db:`; 500s. **Diagnose:** `DATABASE_URL` is the reference `${{Postgres.DATABASE_URL}}`; Postgres service status/volume usage; PLANNED `db_error` events. **Recover:** fix reference, restart Postgres service if unhealthy. **Verify:** `/health`, a read endpoint. **Escalate:** restore from backup (§14) only after confirming data loss.
 
-## 4. Authentication problems [PLANNED: per-employee login]
-- **Symptoms:** employee cannot log in / everyone logged out. **Signals:** `auth_failed` rate and lockouts (`locked_until` set; clears after the delay or by manager reset); `APP_SECRET` changed invalidates all sessions. **Diagnose:** is it one employee (code reissue) or all (secret/cookie `Secure` over http)? **Recover:** manager reissues the access code; restore `APP_SECRET`. **Verify:** login + `GET /api/me`. **Escalate:** suspected brute force → check login rate-limit events, rotate codes.
+## 4. Authentication problems [EXISTS: per-account login]
+- **Symptoms:** an employee cannot log in, the manager cannot log in, everyone is logged out, or a browser action returns 403 "Request blocked.".
+- **Signals:** `auth_failed` (`reason`: `bad_credentials`, `no_valid_session`, `stale_session`, `unknown_user_in_session`, `bad_cron_secret`), `login_blocked` (`scope`: `name` and/or `ip`, `retry_after`), `forbidden`, `csrf_blocked` (`reason`), startup warnings `manager_login_disabled` and `ip_throttle_disabled`. Logs never contain names or codes; use `user_id` and the `request_id` the user can read from the `X-Request-ID` header.
+- **Diagnose:**
+  - *One employee:* 429 means locked (5 failures, 60 s then doubling up to 15 min); wait, or the employee is typing the wrong code. If the code is lost, rotate it. `python -m app.users list` shows whether the account has a code.
+  - *Manager:* check `MANAGER_NAME` / `MANAGER_PASSWORD` in Variables (production needs 12+ characters; the app refuses to start without it). A changed `MANAGER_PASSWORD` takes effect at the next deploy and signs the manager out everywhere. The login name must match `MANAGER_NAME` exactly.
+  - *Everyone logged out:* `APP_SECRET` changed (sessions are signed with it), or `SESSION_HOURS` passed (24 h by default).
+  - *Everyone blocked by IP:* only when `CLIENT_IP_HEADER` is set and the header carries a shared proxy address; unset it (per-account limits still apply) and verify the header (`architecture.md` section 7).
+  - *403 "Request blocked." in the browser:* the CSRF check. Cause is a missing `X-Requested-With` header (an old cached `app.js`), a different `Host`/`Origin` (custom domain or proxy rewriting Host: add the origin to `ALLOWED_ORIGINS`), or a genuine cross-site request.
+- **Recover:** `python -m app.users rotate "Name"` against the target database (prints a new code once; hand it over out of band; this also signs that person out everywhere). Lockouts expire by themselves; there is no manual unlock in the MVP (a locked name has to wait out the delay, at most 15 minutes; rotating the code does not clear a lock).
+- **Verify:** the person can log in; `GET /api/me` returns the right role; an `audit_log` row `user.code_rotated` exists for a rotation.
+- **Escalate:** a burst of `login_blocked` / `auth_failed` for many names is guessing: leave the limits on, rotate the manager password and `APP_SECRET`, and review `audit_log`. A leaked code: rotate it and review that person's recent activity.
 
 ## 5. Employee submission failures [PLANNED]
 - **Symptoms:** "הגשה נכשלה", 4xx/5xx on `PUT /api/availability`. **Signals:** `availability_submitted` absent; validation error type; 409 = deadline passed. **Diagnose:** is the week row present; employee id from session; payload dates inside the week. **Recover:** fix cause; employee resubmits (before deadline). If a legitimate submission was lost at the deadline boundary → manager decides (no silent reopen; use a change request). **Verify:** submission visible on manager dashboard. **Escalate:** repeated 500s → rollback.
