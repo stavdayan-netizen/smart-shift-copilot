@@ -1,9 +1,9 @@
-"""The three limits: per user per hour, per day in dollars, file size at the door."""
+"""The limits: per user per hour and per day in dollars."""
 from app.db import Conversation, Message, Run, User
 from app.limits import local_day_start_utc, messages_last_hour, spend_today_usd
 
 
-def _user(db, name="Dana"):
+def _user(db, name="Tester"):
     return db.query(User).filter_by(name=name).one()
 
 
@@ -34,13 +34,6 @@ def test_daily_cap_stops_the_app(client, db, logged_in, fake):
     assert "Back tomorrow" in r.json()["detail"]
     db.query(Run).filter(Run.cost_usd == 1.50).delete()
     db.commit()
-
-
-def test_oversized_image_is_refused(client, db, logged_in, fake):
-    big = "A" * (6 * 1024 * 1024)  # ~4.5 MB decoded... make it clearly over 5 MB
-    big = "A" * (8 * 1024 * 1024)
-    r = client.post("/api/chat", json={"message": "invoice", "image": {"media_type": "image/png", "data": big}})
-    assert r.status_code == 413
 
 
 def test_day_start_is_midnight_in_business_timezone():

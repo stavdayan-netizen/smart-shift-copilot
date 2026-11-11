@@ -1,4 +1,4 @@
-"""Bakery Copilot backend: the API, the static UI, the health check, the digest hook.
+"""Smart Shift Copilot backend: the API, the static UI, the health check, the digest hook.
 
 One service does everything (architecture.md, "Where things run"). The agent
 loop itself lives in agent.py; this file is doors, locks and plumbing.
@@ -21,7 +21,6 @@ from .agent import get_model_client, run_turn
 from .config import ROOT, settings
 from .db import Conversation, Message, SessionLocal, engine, get_db, init_db
 from .digest import build_digest, send_digest
-from .tools.invoices import recent_invoices
 
 
 @asynccontextmanager
@@ -33,7 +32,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Bakery Copilot", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="Smart Shift Copilot", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
@@ -46,15 +45,9 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-class ImageIn(BaseModel):
-    media_type: str = Field(pattern=r"^image/(png|jpeg|webp|gif)$")
-    data: str  # base64, no data: prefix
-
-
 class ChatIn(BaseModel):
     conversation_id: int | None = None
     message: str = Field(default="", max_length=4000)
-    image: ImageIn | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +122,7 @@ def list_messages(conversation_id: int, request: Request, db: Session = Depends(
     if conv is None or conv.user_id != user.id:
         raise HTTPException(404, "Conversation not found.")
     rows = db.scalars(select(Message).where(Message.conversation_id == conv.id).order_by(Message.id)).all()
-    return [{"id": m.id, "role": m.role, "content": m.content, "has_image": m.has_image,
+    return [{"id": m.id, "role": m.role, "content": m.content,
              "created_at": m.created_at.isoformat(timespec="seconds")} for m in rows]
 
 
@@ -137,11 +130,10 @@ def list_messages(conversation_id: int, request: Request, db: Session = Depends(
 def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
     """One turn. Checks the three limits, then streams the agent's events as SSE."""
     user = auth.current_user(request, db)
-    if not payload.message.strip() and payload.image is None:
-        raise HTTPException(400, "Say something or attach an invoice.")
+    if not payload.message.strip():
+        raise HTTPException(400, "Say something.")
     limits.check_rate_limit(db, user.id)
     limits.check_daily_cap(db)
-    limits.check_upload_size(payload.image.data if payload.image else None)
 
     conv = None
     if payload.conversation_id is not None:
@@ -150,7 +142,6 @@ def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
             raise HTTPException(404, "Conversation not found.")
     conv_id = conv.id if conv else None
     user_id = user.id
-    image = payload.image.model_dump() if payload.image else None
     client = request.app.state.model_client
 
     def sse():
@@ -158,7 +149,7 @@ def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
         with SessionLocal() as sdb:
             suser = sdb.get(type(user), user_id)
             sconv = sdb.get(Conversation, conv_id) if conv_id else None
-            for event in run_turn(sdb, user=suser, conversation=sconv, text=payload.message, image=image, client=client):
+            for event in run_turn(sdb, user=suser, conversation=sconv, text=payload.message, client=client):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
@@ -166,14 +157,8 @@ def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Invoices, stats, digest
+# Stats, digest
 # ---------------------------------------------------------------------------
-
-@app.get("/api/invoices")
-def invoices(request: Request, db: Session = Depends(get_db)):
-    auth.current_user(request, db)
-    return recent_invoices(db, limit=50)
-
 
 @app.get("/api/stats")
 def stats(request: Request, db: Session = Depends(get_db)):

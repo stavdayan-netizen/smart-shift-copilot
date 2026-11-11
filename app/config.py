@@ -70,7 +70,6 @@ class Settings:
     history_limit: int
     rate_limit_per_hour: int
     daily_cap_usd: float
-    max_upload_mb: int
     cron_secret: str | None
     digest_webhook_url: str | None
     timezone: str
@@ -109,7 +108,7 @@ def load_settings() -> Settings:
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
     return Settings(
-        app_password=app_password or "bakery",
+        app_password=app_password or "change-me",
         app_secret=app_secret or secrets.token_hex(32),
         database_url=database_url,
         anthropic_api_key=api_key,
@@ -119,7 +118,6 @@ def load_settings() -> Settings:
         history_limit=int(_env("HISTORY_LIMIT", "20")),
         rate_limit_per_hour=int(_env("RATE_LIMIT_PER_HOUR", "30")),
         daily_cap_usd=float(_env("DAILY_CAP_USD", "3.00")),
-        max_upload_mb=int(_env("MAX_UPLOAD_MB", "5")),
         cron_secret=_env("CRON_SECRET"),
         digest_webhook_url=_env("DIGEST_WEBHOOK_URL"),
         timezone=_env("TIMEZONE", "Asia/Jerusalem"),

@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-_TMP = Path(tempfile.mkdtemp(prefix="bakery-copilot-tests-"))
+_TMP = Path(tempfile.mkdtemp(prefix="smart-shift-tests-"))
 os.environ.update({
     "MODEL_PROVIDER": "fake",
     "DATABASE_URL": f"sqlite:///{_TMP / 'test.db'}",
@@ -44,7 +44,7 @@ def db():
 
 @pytest.fixture
 def logged_in(client):
-    r = client.post("/api/login", json={"name": "Dana", "password": "test-pass"})
+    r = client.post("/api/login", json={"name": "Tester", "password": "test-pass"})
     assert r.status_code == 200, r.text
     return r.json()
 

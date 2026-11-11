@@ -45,4 +45,4 @@ Legend: ★ essential for course submission · ◇ deferrable.
 18. **P2-3 Permanent employee profile settings**
 19. **P2-4 Availability form restrictions from profile settings**
 
-The instructor's `scripts/create_issues.sh` is bakery-specific; it is not used for this list.
+The instructor's bakery issue script was removed in M0-1; the GitHub issues are the source of truth.

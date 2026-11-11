@@ -4,6 +4,8 @@
 
 ## 1. Baseline: what exists today (instructor code, inspected)
 
+*Update after M0-1: the bakery tools, datasets, invoice UI and image upload are removed. The table below describes the reusable infrastructure that remains; the `Tools` row now has an empty registry, and `Digest` content is generic. The `users` table and shared-password login are still in place until M0-3.*
+
 | Area | Today (bakery) | File |
 |---|---|---|
 | API | FastAPI, one service serving API and static UI | `app/main.py` |
