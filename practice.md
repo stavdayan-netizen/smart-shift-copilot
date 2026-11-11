@@ -45,7 +45,7 @@ Adapted from the instructor's eight-step ticket loop. `CLAUDE.md` points here. *
 
 ## 5. Tests
 
-- **Deterministic tests** (`pytest -q`, model mocked, no network, no key): engine, validator (property tests: no output violates H1–H3), deadline/DST, auth matrix, API, tools, digest, log redaction. Must pass on SQLite **and** PostgreSQL (CI runs both).
+- **Deterministic tests** (`pytest -q`, model mocked, no network, no key): engine, validator (property tests: no output violates H1–H2), deadline/DST, auth matrix, API, tools, digest, log redaction. Must pass on SQLite **and** PostgreSQL (CI runs both).
 - **Model-dependent evals** (`python -m evals.run`, real model, costs money): tool selection, Hebrew request interpretation, hard-constraint refusal, unavailable employee, ambiguity → clarification, preference explanations match stored facts, confirmation before modification, no fabricated data, cost/latency. Run only when prompt/tools/model change **and the owner approved the spend**; paste pass rate and tokens in the PR.
 - Never mix them: evals are not part of the default test command.
 
