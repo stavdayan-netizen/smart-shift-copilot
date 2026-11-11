@@ -76,6 +76,7 @@ class Settings:
     model_provider: str  # "anthropic" | "fake"
     session_hours: int
     environment: str  # "local" | "staging" | "production"
+    log_level: str
 
     @property
     def is_sqlite(self) -> bool:
@@ -124,6 +125,7 @@ def load_settings() -> Settings:
         model_provider=provider,
         session_hours=int(_env("SESSION_HOURS", "72")),
         environment=environment,
+        log_level=(_env("LOG_LEVEL", "INFO") or "INFO").upper(),
     )
 
 

@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from .config import ROOT, settings
 from .costs import Usage, cost_usd
 from .db import Conversation, Message, Run, User, utcnow
+from .logging_setup import log_event, log_exception
 from .tools import registry
 
 try:  # the SDK is optional at import time so tests run without it configured
@@ -229,6 +230,11 @@ def run_turn(db: Session, *, user: User, conversation: Conversation | None, text
         run.duration_ms = int((time.monotonic() - started) * 1000)
         db.add(run)
         db.commit()
+        log_event("copilot_run", level="info" if status in ("ok", "aborted") else "warning", run_id=run.id, status=status,
+                  model=run.model, effort=settings.model_effort, input_tokens=run.input_tokens, output_tokens=run.output_tokens,
+                  cache_read_tokens=run.cache_read_tokens, cache_write_tokens=run.cache_write_tokens, cost_usd=run.cost_usd,
+                  tool_calls=run.tool_calls, duration_ms=run.duration_ms,
+                  **({"error_type": (error or "").split(":")[0]} if error else {}))
 
     try:
         # 3. The loop.
@@ -293,5 +299,6 @@ def run_turn(db: Session, *, user: User, conversation: Conversation | None, text
         raise
     except Exception as exc:  # noqa: BLE001 - every failure becomes a run row and a visible message
         db.rollback()
+        log_exception("agent_error", exc)
         finish_run("error", f"{type(exc).__name__}: {exc}"[:2000])
         yield {"type": "error", "message": _friendly(exc)}

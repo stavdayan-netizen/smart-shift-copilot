@@ -19,7 +19,7 @@ export default defineRailway(() => {
     source: shiftCopilot,
     build: { buildEnvironment: "V3", builder: "RAILPACK" },
     deploy: {
-      startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT",
+      startCommand: "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT",
       healthcheckPath: "/health",
       healthcheckTimeout: 120,
       // ON_FAILURE is Railway's default; declaring it makes every plan report

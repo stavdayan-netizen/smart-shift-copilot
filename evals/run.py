@@ -36,7 +36,8 @@ os.environ.setdefault("DAILY_CAP_USD", "1000")
 
 from app import agent as agent_module  # noqa: E402
 from app.config import settings  # noqa: E402
-from app.db import Conversation, Message, SessionLocal, User, init_db  # noqa: E402
+from app.db import Conversation, Message, SessionLocal, User  # noqa: E402
+from app.migrations import upgrade_to_head  # noqa: E402
 
 
 def git_sha() -> str:
@@ -128,7 +129,7 @@ def main() -> int:
         print("ANTHROPIC_API_KEY is not set; evals need the real model.", file=sys.stderr)
         return 2
 
-    init_db()
+    upgrade_to_head()
     client = agent_module.get_model_client()
     cases = yaml.safe_load((HERE / "cases.yaml").read_text(encoding="utf-8"))
     if args.only:

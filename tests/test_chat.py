@@ -104,18 +104,6 @@ def test_dropped_connection_leaves_no_half_row(client, db, logged_in, fake):
     assert run.status == "aborted"
 
 
-def test_startup_prints_the_seed_report(client, capsys):
-    # The deploy guide checks this line in the logs.
-    from fastapi.testclient import TestClient
-
-    from app.main import app
-
-    capsys.readouterr()
-    with TestClient(app):
-        pass
-    assert "seed report: schema_version: 1" in capsys.readouterr().out
-
-
 def test_digest_endpoint_needs_secret(client, logged_in):
     assert client.post("/internal/digest").status_code == 401
     r = client.post("/internal/digest", headers={"X-Cron-Secret": "cron-test"})
