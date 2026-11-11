@@ -79,7 +79,7 @@ def test_unknown_tool_and_bad_input_return_errors_not_exceptions(client, db):
 def test_refusal_is_reported_not_hidden(client, db, logged_in, fake):
     fake.turns.append([ModelEvent(type="stop", stop_reason="refusal", usage=Usage(50, 0), content=[])])
     events = read_sse(client.post("/api/chat", json={"message": "do something odd"}))
-    assert any(e["type"] == "text" and "can't help" in e["text"] for e in events)
+    assert any(e["type"] == "text" and "אין לי אפשרות" in e["text"] for e in events)
     conv_id = events[0]["conversation_id"]
     assert db.query(Run).filter_by(conversation_id=conv_id).one().status == "refusal"
 

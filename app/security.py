@@ -65,7 +65,7 @@ class SecurityMiddleware:
         reason = csrf_problem(scope.get("method", "GET"), path, headers)
         if reason:
             log_event("csrf_blocked", "warning", reason=reason, method=scope.get("method"))
-            body = json.dumps({"detail": "Request blocked."}).encode()
+            body = json.dumps({"detail": "הבקשה נחסמה."}).encode()
             await send({"type": "http.response.start", "status": 403,
                         "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode()),
                                     (b"cache-control", b"no-store")]})

@@ -19,7 +19,7 @@
 | Tests/evals | pytest with fake model; real-model evals with history CSV | `tests/`, `evals/` |
 | CI | pytest on PR/push; evals if secret set | `.github/workflows/ci.yml` |
 | Railway | IaC `railway.ts`: web + digest cron + Postgres, `/health` | `.railway/railway.ts` |
-| UI | Plain HTML/CSS/JS, **LTR, English**, one `@media (max-width: 900px)` | `static/` |
+| UI | **Hebrew RTL, mobile-first shell (implemented in M0-4)**: plain HTML/CSS/JS, no build step, no external requests; was LTR English | `static/` |
 | Logging | **Structured JSON logs, request IDs, redaction (implemented in M0-2)**; was `print()` only | `app/logging_setup.py` |
 | Migrations | **Alembic (implemented in M0-2)**; was `create_all` | `alembic/`, `app/migrations.py` |
 
@@ -52,6 +52,18 @@ One web service (as the instructor decided: UI+API together, ~15 users), one Pos
 - **Backend**: all authority — identity, role checks, deadline enforcement, validation, scheduling, audit, cost limits.
 - **Engine**: pure functions over plain data; no DB, no clock, no model. Easy to property-test.
 - **Agent**: translates manager language into tool calls and explains results. Cannot write approved/published data directly.
+
+## 3a. UI shell (implemented in M0-4)
+
+- **Files:** `static/index.html` (skeleton, icon sprite, login and legal dialog), `styles.css` (tokens, components, layout), `app.js` (views, routing, API helper), `strings.js` (all copy), `markdown.js` (safe renderer), `fonts/` (Heebo woff2 + OFL licence), `favicon.svg`. No framework, bundler or CDN; the page makes no request to any other origin.
+- **Views and roles:** login, then one shell. The role from `/api/me` picks the destinations: manager = Copilot + account, employee = home placeholder + account. Only working destinations are listed, so there are no disabled tabs. Hash routes outside the role's list fall back to its first destination. This is presentation only: every endpoint still enforces its role on the server (section 7). The bundle is the same for both roles.
+- **Navigation:** bottom bar under 768 px, a rail on the inline-start edge from 768 px (right edge in RTL). Copilot history is a drawer (focus moves into it, the rest is made `inert`, Escape closes) under 1024 px and a column from 1024 px. After each route change focus moves to the screen heading, and a live region announces login.
+- **RTL and Hebrew:** `<html lang="he" dir="rtl">`; CSS uses logical properties only (a test rejects `left/right`, `margin-left` and similar); direction-bearing icons (send, logout) are mirrored with `[dir=rtl] .flip-rtl`; user and model text blocks use `dir="auto"`; the access-code field is LTR. All copy is in `strings.js`, gender-neutral where possible; user-facing server messages (login, lockout, session, forbidden, not found, limits, agent errors) are Hebrew; `/health`, the CLI and the cron endpoint stay English because operators read them.
+- **Theme:** warm neutral background (`#F6F3EE`), white cards, muted teal accent (`#2B7A78`), one calm shadow, no gradients, a small sparkle icon marks the AI. Dark mode follows `prefers-color-scheme` (default stays light). Colours are tokens in `:root`; `tests/test_ui_shell.py` computes WCAG contrast for every text/background pair in both schemes (AA) and fails below 4.5:1 (3:1 for UI accents and focus rings).
+- **Typography:** Heebo variable (100-900), self-hosted woff2 subsets (Hebrew 12 KB, Latin 30 KB) loaded with `unicode-range` and `font-display: swap`; SIL OFL 1.1, licence and provenance in `static/fonts/`. Fallback stack: system-ui, Segoe UI, Arial, Noto Sans Hebrew, sans-serif (checked with Heebo blocked). Base size 16 px, line height 1.6; inputs are 16 px so iOS does not zoom.
+- **Touch and accessibility:** every interactive control is at least 44 x 44 px (tokens + test + measured in the browser); visible focus rings; skip link; landmarks; `aria-current` on navigation; labelled controls; reduced-motion and forced-colors rules.
+- **Secure Markdown (`markdown.js`):** supports paragraphs, `**bold**`, bullet and numbered lists and pipe tables, nothing else. A pure parser produces blocks; a builder creates elements from a fixed allow-list (`p strong br ul ol li table thead tbody tr th td div`) with fixed attributes only (`dir class role tabindex aria-label scope`) and inserts text with `createTextNode`. There is no `innerHTML`, no link or image handling, so `<script>`, `<img onerror>` and `javascript:` stay inert text (a lint test forbids `innerHTML`, `eval` and friends in the UI code; node tests include a 3,000-input fuzz run; input is capped at 20,000 characters). Tables sit in a labelled, keyboard-scrollable region so a wide table never widens the page.
+- **Verification:** automated (`tests/test_ui_shell.py`, `tests/js/markdown.test.js` run in CI under node) plus `scripts/ui_check.py`, a dependency-free Chromium driver that measures overflow (both edges, because RTL overflow leaves through the left edge and `scrollWidth` does not grow), target sizes, direction, fonts and console errors at 360, 390, 768 and 1280 px in light and dark and records screenshots (`docs/ui-checks/m0-4/`).
 
 ## 4. Database schema (planned; PostgreSQL production, SQLite for fast local tests)
 
@@ -171,12 +183,14 @@ Policy for every state-changing request (not GET/HEAD/OPTIONS; `/internal/digest
 
 ## 8. Data flows
 
-- **Submit availability**: employee → `PUT /api/availability` → auth → load week → `now < deadline_at` else 409 → validate (dates within week, shifts exist, min≤max) → transaction: upsert submission + replace slots → audit + log → 200.
+- **Submit availability**: employee → `PUT /api/availability` → auth → load week → window check (`opens_at <= now < closes_at`, see the submission-window function below) else 409 → validate (dates within week, shifts exist, min≤max) → transaction: upsert submission + replace slots → audit + log → 200.
 - **Change request**: after deadline only (before deadline: UI directs to the form) → creates `pending` + items → manager decision → transaction: status, audit, and effective-availability recomputation → conflicts with published assignments surfaced, nothing moved.
 - **Draft**: manager → `POST /api/weeks/{week_start}/draft` → `now ≥ deadline(week_start)` else 409 → engine → validator → save draft with `run_json` → response with unfilled list.
 - **Publish**: manager confirmation → transaction: validate draft again, supersede previous published, set published, audit.
 - **Copilot turn**: as instructor, plus proposal confirmation flow above.
 - **Digest**: cron → `python -m app.digest` → queries → text (+ webhook) → `audit_log` row (`digest_run`).
+
+**Submission window (planned, approved 2026-11-11; not implemented).** A pure function `submission_window(week_start, preceding_published_at) -> (opens_at, closes_at)` in the deadline module: `closes_at` = Tuesday 22:00 Asia/Jerusalem, 5 days before `week_start`; `opens_at` = `min(preceding_published_at, Thursday 22:00 Asia/Jerusalem, 10 days before week_start)`, where `preceding_published_at` is the earliest `published_at` among the `published`/`superseded` schedules of `week_start - 7 days` (none for the first cycle, so the Thursday rule applies). Both instants are computed with `zoneinfo` (DST-safe) and derived on demand; nothing about the window is stored. Availability writes require `opens_at <= now < closes_at`. The dashboard, Copilot tools and daily brief use the same function. Draft generation still requires `now >= closes_at` of the target week. Publishing a schedule (M3-3) is what can open the next window early, so the M1 form first ships with the Thursday rule alone and M3-3 adds the publication trigger.
 
 Time source: a single `clock.now()` function; a `CLOCK_OVERRIDE` variable honored **only when `APP_ENV != production`** to test the deadline on the demo.
 

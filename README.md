@@ -40,9 +40,13 @@ Sign in at http://localhost:8000 as `MANAGER_NAME` with `MANAGER_PASSWORD` (set 
 
 Required environment variables (names only; values never committed): `APP_ENV`, `MANAGER_NAME`, `MANAGER_PASSWORD`, `APP_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT`, `DAILY_CAP_USD`, `TIMEZONE`, `CRON_SECRET`, `DIGEST_WEBHOOK_URL`, `LOG_LEVEL`, `SESSION_HOURS`, `CLIENT_IP_HEADER`, `ALLOWED_ORIGINS` (and `TEST_DATABASE_URL` for tests on PostgreSQL). For a keyless local run set `MODEL_PROVIDER=fake`. Planned changes are listed in `architecture.md` §10.
 
+## User interface
+
+Hebrew, right-to-left, mobile-first, light by default (dark follows the device). The product name stays in English; all other copy is Hebrew. Managers see the Copilot chat (still placeholder replies until issue #7) and their account page; employees see a placeholder home and their account page. Heebo is self-hosted under the SIL Open Font License (`static/fonts/`). Model replies are rendered by a small safe Markdown renderer. Evidence of the responsive checks: [docs/ui-checks/m0-4/](docs/ui-checks/m0-4/README.md); re-run them with `python scripts/ui_check.py --help`.
+
 ## Tests
 
-`pytest -q` runs deterministic tests with a fake model (no key, no cost). `python -m evals.run` calls the real model and costs money; run only with owner approval. After M0-2 (2026-11-11, Windows, Python 3.12.10, SQLite, fake model): **101 passed** (SQLite); CI runs the same suite on SQLite and on PostgreSQL 16 (`TEST_DATABASE_URL`). PostgreSQL cannot be run on the development machine (no Docker/psql), so PostgreSQL results come from GitHub Actions.
+`pytest -q` runs deterministic tests with a fake model (the Markdown renderer tests need node and are skipped without it; CI always runs them) (no key, no cost). `python -m evals.run` calls the real model and costs money; run only with owner approval. After M0-2 (2026-11-11, Windows, Python 3.12.10, SQLite, fake model): **101 passed** (SQLite); CI runs the same suite on SQLite and on PostgreSQL 16 (`TEST_DATABASE_URL`). PostgreSQL cannot be run on the development machine (no Docker/psql), so PostgreSQL results come from GitHub Actions.
 
 ## Deployment
 

@@ -35,6 +35,12 @@ Adapted from the instructor's eight-step ticket loop. `CLAUDE.md` points here. *
 
 **Never claim visual testing was performed unless it was.** State the tool used and the widths covered.
 
+**Recording the evidence (UI tasks):**
+- Run `python scripts/ui_check.py` (or an equivalent real-browser check) at the four widths in light and dark and commit `results.json`, a README with the results table and a curated set of screenshots under `docs/ui-checks/<issue>/`. The README lists what was **not** verified (real devices, other browsers, screen readers, ...).
+- Overflow checks must look at **both** edges. In RTL, content that is too wide leaves through the left edge and `scrollWidth` does not grow, so a `scrollWidth` check alone passes a broken layout.
+- Grid and flex layouts holding long content need `minmax(0, 1fr)` columns and `min-inline-size: 0`; check long unbroken text, tables and long titles.
+- Model or user text is never inserted with `innerHTML`; use the safe renderer or `textContent` (a test enforces it).
+
 ## 4. Code quality and safety
 
 - Every new behaviour has tests; failures are handled explicitly (no bare `except`, no silent fallbacks).
@@ -47,6 +53,7 @@ Adapted from the instructor's eight-step ticket loop. `CLAUDE.md` points here. *
 
 ## 5. Tests
 
+- **UI tests** (`tests/test_ui_shell.py`, `tests/js/markdown.test.js` through `tests/test_js_renderer.py`): RTL structure, logical CSS, all copy Hebrew, contrast, touch targets, fonts, no unsafe DOM calls, Hebrew API messages. CI has node; on a machine without it that one test skips (run `tests/js/run.html` in a browser).
 - **Deterministic tests** (`pytest -q`, model mocked, no network, no key): engine, validator (property tests: no output violates H1–H2), deadline/DST, auth matrix, API, tools, digest, log redaction. Must pass on SQLite **and** PostgreSQL (CI runs both).
 - **Model-dependent evals** (`python -m evals.run`, real model, costs money): tool selection, Hebrew request interpretation, hard-constraint refusal, unavailable employee, ambiguity → clarification, preference explanations match stored facts, confirmation before modification, no fabricated data, cost/latency. Run only when prompt/tools/model change **and the owner approved the spend**; paste pass rate and tokens in the PR.
 - Never mix them: evals are not part of the default test command.

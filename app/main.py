@@ -167,7 +167,7 @@ def list_messages(conversation_id: int, user: User = Depends(auth.require_manage
 def chat(payload: ChatIn, request: Request, user: User = Depends(auth.require_manager), db: Session = Depends(get_db)):
     """One turn (manager only). Checks the limits, then streams the agent's events as SSE."""
     if not payload.message.strip():
-        raise HTTPException(400, "Say something.")
+        raise HTTPException(400, "אפשר לכתוב הודעה.")
     limits.check_rate_limit(db, user.id)
     limits.check_daily_cap(db)
     log_event("copilot_request", user_id=user.id, conversation_id=payload.conversation_id, message_len=len(payload.message))
