@@ -1,47 +1,62 @@
 # runbook.md — when it breaks
 
-Written while everything works. Each entry is a sequence: click here, run this, check that. Add an entry after every incident.
+**Status:** structure and incident list are written ahead of the code. Every entry is tagged **[EXISTS]** (works today in the instructor's code), **[PLANNED]** (depends on a feature or command not built yet) — do not treat PLANNED steps as verified. Remove tags as features land, and add an entry for every new failure mode (`practice.md` §6). Railway steps follow the instructor's runbook (`docs/deploy-railway.md` §6–§8).
 
-## App is down (health check red, URL not loading)
+Common first moves: Railway → service → **Deployments** / **Logs**; filter logs by `request_id` or `event`. `GET /health` shows `problems`.
 
-1. Railway → the web service → **Deployments**. Is the latest deploy red? Open its logs; the last lines say why (usually a missing variable or a failed import).
-2. Click the previous green deploy → **Redeploy**. The app is back on the old version within a minute.
-3. Open an issue with the log lines. Fix forward through a PR. Do not edit anything in the Railway shell.
+Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/escalate.
 
-## Model errors (replies fail with "try again in a minute")
+## 1. App will not start / health red [EXISTS; log fields PLANNED]
+- **Symptoms:** URL fails, deploy red. **Signals:** deploy logs; PLANNED `app_start` missing, startup `RuntimeError: Missing required variables in production`.
+- **Diagnose:** last log lines; compare Variables with `.env.example`. **Recover:** set variable → redeploy; or Redeploy previous green deploy. **Verify:** `/health` 200, login works. **Escalate:** open a `bug` issue with log lines; fix forward via PR.
 
-1. Check `https://status.anthropic.com`. If there is an incident, wait; the SDK already retries 429/529.
-2. Check the day cap: `GET /api/stats` (signed in). If `spend_today_usd ≥ daily_cap_usd`, the app is doing its job; raise `DAILY_CAP_USD` in Variables only if Dana agrees to the cost.
-3. Check the key: `/health` says `ANTHROPIC_API_KEY missing` if the variable was lost. Set it in Variables and redeploy.
-4. Look at the `runs` table for `status = 'error'` and the `error` column.
+## 2. Railway deployment failure [EXISTS]
+- Build logs (Railpack, `requirements.txt`, `.python-version`); "repository not accessible" → Railway GitHub app access; `railway config plan` drift (IaC still pointing at the instructor's repo is a **known pre-deploy blocker**). Recover: fix, or redeploy previous. Verify: `/health`, smoke test (§17). Rollback: Deployments → previous → Redeploy.
 
-## A key leaked (in a commit, a chat, a screenshot)
+## 3. PostgreSQL connectivity [EXISTS; log events PLANNED]
+- **Symptoms:** `/health` 503 with `db:`; 500s. **Diagnose:** `DATABASE_URL` is the reference `${{Postgres.DATABASE_URL}}`; Postgres service status/volume usage; PLANNED `db_error` events. **Recover:** fix reference, restart Postgres service if unhealthy. **Verify:** `/health`, a read endpoint. **Escalate:** restore from backup (§14) only after confirming data loss.
 
-1. **Rotate first.** platform.claude.com → API keys → revoke the key, create a new one. For `APP_PASSWORD` or `APP_SECRET`: generate new values.
-2. Update the Railway Variables, redeploy. Sessions will be invalidated when `APP_SECRET` changes; users sign in again.
-3. Only then clean Git history (`git filter-repo` or a fresh repo for a small project) and force-push. Tell anyone who cloned.
-4. Add a `bug` issue describing how it leaked, and a rule to practice.md if one is missing.
+## 4. Authentication problems [PLANNED: per-employee login]
+- **Symptoms:** employee cannot log in / everyone logged out. **Signals:** `auth_failed` rate and lockouts (`locked_until` set; clears after the delay or by manager reset); `APP_SECRET` changed invalidates all sessions. **Diagnose:** is it one employee (code reissue) or all (secret/cookie `Secure` over http)? **Recover:** manager reissues the access code; restore `APP_SECRET`. **Verify:** login + `GET /api/me`. **Escalate:** suspected brute force → check login rate-limit events, rotate codes.
 
-## Wrong rows written (an invoice logged twice, wrong amount, wrong supplier)
+## 5. Employee submission failures [PLANNED]
+- **Symptoms:** "הגשה נכשלה", 4xx/5xx on `PUT /api/availability`. **Signals:** `availability_submitted` absent; validation error type; 409 = deadline passed. **Diagnose:** is the week row present; employee id from session; payload dates inside the week. **Recover:** fix cause; employee resubmits (before deadline). If a legitimate submission was lost at the deadline boundary → manager decides (no silent reopen; use a change request). **Verify:** submission visible on manager dashboard. **Escalate:** repeated 500s → rollback.
 
-1. Pause the cron service so the digest does not report it again.
-2. Find the turn: `runs` table → by time → `conversation_id`; the UI's Invoices panel shows the rows.
-3. Fix forward via a ticket: a migration or a one-off script committed to the repo, reviewed, run once. Never edit rows in the database console by hand.
-4. If the cause was the prompt or the tool rules, add an eval case first, then fix.
+## 6. Deadline / timezone errors [PLANNED]
+- **Symptoms:** form locked early/late, DST week off by one hour. **Signals:** `deadline_state` events with computed `deadline_at` (UTC) and local time. **Diagnose:** `TIMEZONE` variable; container tz database present (`tzdata` in requirements); `CLOCK_OVERRIDE` must be unset in production (startup refuses it). **Recover:** fix config; if a week row has a wrong `deadline_at`, correct via a reviewed migration/script, never by hand. **Verify:** deadline unit tests incl. DST weeks; compare displayed deadline to Tuesday 22:00 Israel.
 
-## Database restore
+## 7. Schedule generation failure [PLANNED]
+- **Symptoms:** draft request errors; **Signals:** `draft_generated` missing, `schedule_validation_failed`. **Diagnose:** before deadline (expected 409)? engine exception vs validator rejection (engine bug → output is withheld by design). **Recover:** retry; file a bug with the `schedules.run_json` (schedule id) and inputs hash (no personal text). **Verify:** draft generated, validator clean. **Escalate:** a validator rejection is a P1 bug; do not publish.
 
-1. Railway → Postgres → **Backups** → pick the snapshot → restore into the **staging** environment's database.
-2. Point a staging deploy at it; open the app; check Invoices and a sales question.
-3. Promote: restore into production in the same way, during a quiet hour; redeploy the web service.
+## 8. Unsatisfiable constraints / uncovered shifts [PLANNED]
+- Not an outage. The result lists unfilled slots with reasons. Manager options: wait for/approve change requests, contact employees, accept gaps. Verify via `get_staffing_gaps`. Escalate only if the report contradicts the data (engine bug).
 
-## Deploy is stuck or the health check never passes
+## 9. Agent / tool errors [PLANNED]
+- **Symptoms:** Copilot replies with an error; tool chip fails. **Signals:** `tool_executed` status/error_type; `runs.tool_trace`; `runs.status='error'`. **Diagnose:** tool input validation failure vs DB error vs round limit (6). **Recover:** rephrase; fix bug via PR with an eval/test case. **Verify:** repeat the manager question. Never run ad-hoc SQL fixes; data fixes are reviewed scripts.
 
-1. Logs → look for the seed report (`sales_seeded: 29115`). A first deploy seeds the sales table and can take a minute; the health check timeout is 120 s.
-2. If the database URL is wrong, `/health` returns 503 with `db:` in `problems`. Check the `DATABASE_URL` reference variable.
-3. Rollback to the previous deploy if users are waiting; fix in a PR.
+## 10. Anthropic API failures [EXISTS in SDK retry; events PLANNED]
+- Check `status.anthropic.com`; `/health` `ANTHROPIC_API_KEY missing`; `runs.status='error'` and `error_type`. SDK retries 3×. Recover: wait; fix key. Verify: one Copilot turn. Hard-coded unsupported model/effort id → 400s: check `MODEL`/`MODEL_EFFORT`.
 
-## Who to call
+## 11. Rate limits and cost caps [EXISTS]
+- `GET /api/stats`: spend vs `DAILY_CAP_USD`. Cap hit = working as designed; raise only with owner approval. PLANNED: `unknown_model_price` event means cost is being undercounted — add the model to the price table.
 
-- You (the implementer), then Dana (owner, decides on cost and data).
-- Railway status: `https://status.railway.com` · Anthropic status: `https://status.anthropic.com`.
+## 12. Scheduled digest failure [EXISTS for bakery digest; shift digest PLANNED]
+- **Symptoms:** no morning brief. **Signals:** cron service run logs; PLANNED `digest_run` event + `digest_run` audit row; DST guard may skip a duplicate UTC run by design. **Diagnose:** cron expression, service variables (references to web), webhook URL. **Recover:** `POST /internal/digest` with `X-Cron-Secret`. **Verify:** brief contains the section `הגשת משמרות לשבוע הבא` and matches DB counts.
+
+## 13. Database migrations [PLANNED: Alembic]
+- Before deploy: run `alembic upgrade head` against a Postgres copy in CI. Failure at deploy → app won't start: rollback deploy; migrations must be backward compatible with the previous release for one version (expand, then contract). Never edit the production schema by hand.
+
+## 14. Backups and restoration [EXISTS (Railway); drill PLANNED]
+- Railway Postgres → Backups → restore into a staging database first → point a staging deploy → verify (login, submissions, schedule) → then production in a quiet hour. **Practice the restore once before relying on it.**
+
+## 15. Rollback [EXISTS]
+- Deployments → previous green deploy → Redeploy. If a migration ran, check backward compatibility (§13) before rolling back; otherwise restore (§14) or fix forward.
+
+## 16. A secret leaked [EXISTS, from instructor]
+- Rotate first (Anthropic key, `APP_SECRET`, manager password, employee codes, `CRON_SECRET`), update Variables, redeploy, then clean Git history, open a `bug` issue.
+
+## 17. Verification after any incident
+1. `/health` 200. 2. Manager login + employee login. 3. Employee submission round-trip (before deadline) or read-only view (after). 4. Dashboard counts. 5. Draft generation (after deadline) clean. 6. One Copilot turn. 7. Logs show no repeating errors for 10 minutes. 8. Record the incident in this file.
+
+## Contacts
+Owner (cost and data decisions); Railway status `status.railway.com`; Anthropic status `status.anthropic.com`.
