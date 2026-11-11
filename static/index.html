@@ -13,10 +13,18 @@
       <p class="kicker">SMART SHIFT COPILOT</p>
       <h1 id="login-title">Sign in</h1>
       <label>Your name<input id="login-name" name="name" autocomplete="username" required minlength="2" maxlength="40" placeholder="Your name"></label>
-      <label>Team password<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+      <label>Access code (manager: password)<input id="login-password" name="code" type="password" autocomplete="current-password" required></label>
       <button type="submit" class="primary">Enter</button>
       <p id="login-error" class="error" role="alert"></p>
     </form>
+  </div>
+
+  <div id="no-access" class="modal hidden" role="status">
+    <div class="card">
+      <h1>Signed in</h1>
+      <p>There are no employee screens yet. They arrive in a later update.</p>
+      <button id="no-access-logout" class="primary">Sign out</button>
+    </div>
   </div>
 
   <div id="app" class="app hidden">

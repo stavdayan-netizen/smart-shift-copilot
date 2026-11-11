@@ -14,7 +14,8 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 os.environ.update({
     "MODEL_PROVIDER": "fake",
     "DATABASE_URL": TEST_DATABASE_URL or f"sqlite:///{_TMP / 'test.db'}",
-    "APP_PASSWORD": "test-pass",
+    "MANAGER_NAME": "boss",
+    "MANAGER_PASSWORD": "test-manager-password",
     "APP_SECRET": "test-secret-0123456789abcdef",
     "APP_ENV": "local",
     "DAILY_CAP_USD": "1.00",
@@ -45,8 +46,29 @@ def migrated_db():
 
 @pytest.fixture(scope="session")
 def client(migrated_db):
-    with TestClient(app) as c:
+    # The browser UI sends this header on every state-changing request (app/security.py); so does the test client.
+    with TestClient(app, headers={"X-Requested-With": "shift-copilot"}) as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def clean_login_throttle(migrated_db):
+    """Lockout state lives in the database; start every test with none, so one test's failures never lock another."""
+    from sqlalchemy import delete
+
+    from app.db import LoginThrottle
+
+    with SessionLocal() as s:
+        s.execute(delete(LoginThrottle))
+        s.commit()
+    yield
+
+
+@pytest.fixture(autouse=True)
+def fresh_cookies(client):
+    """The shared client must not carry one test's login into the next."""
+    client.cookies.clear()
+    yield
 
 
 @pytest.fixture
@@ -60,7 +82,8 @@ def db():
 
 @pytest.fixture
 def logged_in(client):
-    r = client.post("/api/login", json={"name": "Tester", "password": "test-pass"})
+    client.cookies.clear()
+    r = client.post("/api/login", json={"name": "boss", "code": "test-manager-password"})
     assert r.status_code == 200, r.text
     return r.json()
 

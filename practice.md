@@ -40,6 +40,8 @@ Adapted from the instructor's eight-step ticket loop. `CLAUDE.md` points here. *
 - Every new behaviour has tests; failures are handled explicitly (no bare `except`, no silent fallbacks).
 - Validate all inputs server-side (Pydantic, length caps, enum/range checks).
 - Authorization tests for each new route: own data OK; another employee's data denied; employee → manager route denied.
+- Every new route declares `require_user`, `require_employee` or `require_manager` (or is added to the allow-list in `tests/test_authorization.py` with a stated reason). Employee routes take the employee id from the session, never from the request, and load records with `owned_or_404`. State-changing JS requests send `X-Requested-With: shift-copilot`.
+- Never log or audit an access code, password, session token or hash; accounts and codes are managed only through `python -m app.users`.
 - Critical scheduling operations go through the deterministic validator. No silent changes to approved or published schedules; every such change writes an `audit_log` row.
 - Deadline logic only through the deadline service and `clock.now()`; never compare dates ad hoc. Tests cover Israel DST transitions and the boundary second.
 

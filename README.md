@@ -4,7 +4,7 @@ A Hebrew-first, mobile-friendly, AI-assisted weekly shift scheduling app for one
 
 ## Implementation status
 
-**Planning phase (plan approved 2026-11-11). No Smart Shift features are implemented yet.** This repository is a fork of the instructor's [Bakery Copilot](https://github.com/MaceTenth/bakery-copilot). **M0-1 (issue #1) removed the bakery domain** (sales and invoice tools, datasets, invoice UI and image upload). What remains is the reusable infrastructure: FastAPI app, the Anthropic agent loop with an empty tool registry, conversation and run persistence, shared-password login (to be replaced in M0-3), rate and cost limits, a generic digest skeleton, fake-model tests, evals runner, CI and the Railway IaC file. M0-2 added structured JSON logging with request IDs and redaction, Alembic migrations, an append-only `audit_log` with an atomic audit writer, and a PostgreSQL CI job. The UI is a bare English placeholder chat, not the Hebrew UI. Nothing in "Planned features" below works today.
+**Planning phase (plan approved 2026-11-11). No Smart Shift features are implemented yet.** This repository is a fork of the instructor's [Bakery Copilot](https://github.com/MaceTenth/bakery-copilot). **M0-1 (issue #1) removed the bakery domain** (sales and invoice tools, datasets, invoice UI and image upload). What remains is the reusable infrastructure: FastAPI app, the Anthropic agent loop with an empty tool registry, conversation and run persistence, per-account login (M0-3: manager and employee roles, personal access codes, database-backed lockout, CSRF defence), rate and cost limits, a generic digest skeleton, fake-model tests, evals runner, CI and the Railway IaC file. M0-2 added structured JSON logging with request IDs and redaction, Alembic migrations, an append-only `audit_log` with an atomic audit writer, and a PostgreSQL CI job. The UI is a bare English placeholder chat, not the Hebrew UI. Nothing in "Planned features" below works today.
 
 ## Relationship to Bakery Copilot
 
@@ -36,11 +36,13 @@ alembic upgrade head            # the app no longer creates tables itself
 uvicorn app.main:app --reload
 ```
 
-Required environment variables (names only; values never committed): `APP_ENV`, `APP_PASSWORD`, `APP_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT`, `DAILY_CAP_USD`, `TIMEZONE`, `CRON_SECRET`, `DIGEST_WEBHOOK_URL`, `LOG_LEVEL` (and `TEST_DATABASE_URL` for tests on PostgreSQL). For a keyless local run set `MODEL_PROVIDER=fake`. Planned changes are listed in `architecture.md` §10.
+Sign in at http://localhost:8000 as `MANAGER_NAME` with `MANAGER_PASSWORD` (set both in `.env`). Create a demo employee with `python -m app.users create "Noa Levi"`: the access code is printed once to your terminal and never stored (only its hash). `python -m app.users rotate "Noa Levi"` issues a new one.
+
+Required environment variables (names only; values never committed): `APP_ENV`, `MANAGER_NAME`, `MANAGER_PASSWORD`, `APP_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT`, `DAILY_CAP_USD`, `TIMEZONE`, `CRON_SECRET`, `DIGEST_WEBHOOK_URL`, `LOG_LEVEL`, `SESSION_HOURS`, `CLIENT_IP_HEADER`, `ALLOWED_ORIGINS` (and `TEST_DATABASE_URL` for tests on PostgreSQL). For a keyless local run set `MODEL_PROVIDER=fake`. Planned changes are listed in `architecture.md` §10.
 
 ## Tests
 
-`pytest -q` runs deterministic tests with a fake model (no key, no cost). `python -m evals.run` calls the real model and costs money; run only with owner approval. After M0-2 (2026-11-11, Windows, Python 3.12.10, SQLite, fake model): **46 passed** (SQLite); CI runs the same suite on SQLite and on PostgreSQL 16 (`TEST_DATABASE_URL`). PostgreSQL cannot be run on the development machine (no Docker/psql), so PostgreSQL results come from GitHub Actions.
+`pytest -q` runs deterministic tests with a fake model (no key, no cost). `python -m evals.run` calls the real model and costs money; run only with owner approval. After M0-2 (2026-11-11, Windows, Python 3.12.10, SQLite, fake model): **101 passed** (SQLite); CI runs the same suite on SQLite and on PostgreSQL 16 (`TEST_DATABASE_URL`). PostgreSQL cannot be run on the development machine (no Docker/psql), so PostgreSQL results come from GitHub Actions.
 
 ## Deployment
 

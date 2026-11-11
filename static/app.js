@@ -5,8 +5,8 @@
 
   // ---------- helpers ----------
   async function api(path, options = {}) {
-    const res = await fetch(path, { headers: { "Content-Type": "application/json" }, credentials: "same-origin", ...options });
-    if (res.status === 401) { showLogin(); throw new Error("Please sign in."); }
+    const res = await fetch(path, { headers: { "Content-Type": "application/json", "X-Requested-With": "shift-copilot" }, credentials: "same-origin", ...options });
+    if (res.status === 401 && path !== "/api/login") { showLogin(); throw new Error("Please sign in."); }  // a failed login keeps its own message
     if (!res.ok) {
       let detail = res.statusText;
       try { detail = (await res.json()).detail || detail; } catch (_) {}
@@ -23,19 +23,24 @@
   function scrollDown() { const m = $("messages"); m.scrollTop = m.scrollHeight; }
 
   // ---------- auth ----------
-  function showLogin() { $("login").classList.remove("hidden"); $("app").classList.add("hidden"); }
-  function showApp() { $("login").classList.add("hidden"); $("app").classList.remove("hidden"); $("who").textContent = state.user ? `signed in as ${state.user.name}` : ""; }
+  function showLogin() { $("login").classList.remove("hidden"); $("app").classList.add("hidden"); $("no-access").classList.add("hidden"); }
+  function showApp() {
+    $("login").classList.add("hidden");
+    // Only the manager has screens so far (the Copilot); employees get a notice until their screens exist.
+    if (state.user && state.user.role !== "manager") { $("app").classList.add("hidden"); $("no-access").classList.remove("hidden"); return; }
+    $("no-access").classList.add("hidden"); $("app").classList.remove("hidden"); $("who").textContent = state.user ? `signed in as ${state.user.name}` : ""; }
 
   $("login-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("login-error").textContent = "";
     try {
-      state.user = await api("/api/login", { method: "POST", body: JSON.stringify({ name: $("login-name").value.trim(), password: $("login-password").value }) });
+      state.user = await api("/api/login", { method: "POST", body: JSON.stringify({ name: $("login-name").value.trim(), code: $("login-password").value }) });
       $("login-password").value = "";
       showApp();
-      await loadConversations();
+      if (state.user.role === "manager") await loadConversations();
     } catch (err) { $("login-error").textContent = err.message; }
   });
+  $("no-access-logout").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); state.user = null; showLogin(); });
   $("logout").addEventListener("click", async () => { await api("/api/logout", { method: "POST" }).catch(() => {}); state.user = null; state.current = null; showLogin(); });
 
   // ---------- conversations ----------
@@ -106,7 +111,7 @@
     let full = "";
     try {
       const res = await fetch("/api/chat", {
-        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-Requested-With": "shift-copilot" },
         body: JSON.stringify({ conversation_id: state.current, message: text }),
       });
       if (!res.ok) { let d = res.statusText; try { d = (await res.json()).detail || d; } catch (_) {} throw new Error(d); }
@@ -137,7 +142,7 @@
 
   // ---------- boot ----------
   (async () => {
-    try { state.user = await api("/api/me"); showApp(); await loadConversations(); }
+    try { state.user = await api("/api/me"); showApp(); if (state.user.role === "manager") await loadConversations(); }
     catch (_) { showLogin(); }
   })();
 })();

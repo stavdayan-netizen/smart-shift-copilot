@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -32,10 +34,27 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
+    """A login identity: the manager or an employee. There is no self-registration; accounts are created by an
+    operator (app/users.py) or, for the manager, from MANAGER_NAME / MANAGER_PASSWORD at startup."""
+
     __tablename__ = "users"
+    __table_args__ = (CheckConstraint("access_role in ('employee', 'manager')", name="ck_users_access_role"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(40), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    access_role: Mapped[str] = mapped_column(String(10), default="employee", server_default=text("'employee'"))
+    code_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)  # scrypt hash; never the code
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))  # bump = sign out everywhere
+
+
+class LoginThrottle(Base):
+    """Failed-login counters and lockouts (app/throttle.py). Keys are HMACs, never names or addresses."""
+
+    __tablename__ = "login_throttle"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
 class Conversation(Base):

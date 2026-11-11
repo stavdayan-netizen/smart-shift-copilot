@@ -3,7 +3,7 @@ from app.db import Conversation, Message, Run, User
 from app.limits import local_day_start_utc, messages_last_hour, spend_today_usd
 
 
-def _user(db, name="Tester"):
+def _user(db, name="boss"):
     return db.query(User).filter_by(name=name).one()
 
 

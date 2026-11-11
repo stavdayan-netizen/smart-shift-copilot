@@ -20,7 +20,7 @@ jobs:
       - name: pytest
         env:
           MODEL_PROVIDER: fake
-          APP_PASSWORD: ci
+          MANAGER_PASSWORD: ci-manager-password
           APP_SECRET: ci-secret-not-for-production
         run: |
           alembic upgrade head
@@ -46,7 +46,7 @@ jobs:
           --health-retries 10
     env:
       MODEL_PROVIDER: fake
-      APP_PASSWORD: ci
+      MANAGER_PASSWORD: ci-manager-password
       APP_SECRET: ci-secret-not-for-production
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shift_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shift_test

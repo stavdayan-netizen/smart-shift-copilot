@@ -15,9 +15,9 @@ def test_health_ok(client):
 def test_login_required_and_wrong_password(client):
     client.cookies.clear()
     assert client.get("/api/conversations").status_code == 401
-    bad = client.post("/api/login", json={"name": "Eve", "password": "nope"})
+    bad = client.post("/api/login", json={"name": "Eve", "code": "nope"})
     assert bad.status_code == 401
-    assert client.post("/api/login", json={"name": "E", "password": "test-pass"}).status_code in (400, 422)
+    assert client.post("/api/login", json={"name": "E", "code": "x"}).status_code == 422
 
 
 def test_chat_streams_text_and_saves_once(client, db, logged_in, fake):
@@ -91,7 +91,7 @@ def test_dropped_connection_leaves_no_half_row(client, db, logged_in, fake):
         ModelEvent(type="stop", stop_reason="end_turn", usage=Usage(10, 5), content=[{"type": "text", "text": "x"}]),
     ])
     with SessionLocal() as s:
-        user = s.query(User).filter_by(name="Tester").one()
+        user = s.query(User).filter_by(name="boss").one()
         gen = run_turn(s, user=user, conversation=None, text="cut me off", client=fake)
         meta = next(gen)
         first = next(gen)
