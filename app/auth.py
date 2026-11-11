@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import User
+from .logging_setup import log_event
 
 COOKIE_NAME = "bc_session"
 _NAME_RE = re.compile(r"^[\w .'\-֐-׿]{2,40}$")  # latin, digits, Hebrew letters
@@ -74,8 +75,10 @@ def get_or_create_user(db: Session, name: str) -> User:
 def current_user(request: Request, db: Session) -> User:
     parsed = read_token(request.cookies.get(COOKIE_NAME))
     if parsed is None:
+        log_event("auth_failed", reason="no_valid_session")
         raise HTTPException(401, "Please sign in.")
     user = db.get(User, parsed[0])
     if user is None:
+        log_event("auth_failed", "warning", reason="unknown_user_in_session")
         raise HTTPException(401, "Please sign in.")
     return user

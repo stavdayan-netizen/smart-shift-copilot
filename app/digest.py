@@ -13,7 +13,8 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import Message, Run, SessionLocal, init_db
+from .db import Message, Run, SessionLocal
+from .logging_setup import configure_logging, log_event
 
 
 def _local_bounds(day: date) -> tuple[datetime, datetime]:
@@ -53,12 +54,12 @@ def send_digest(text: str) -> bool:
 
 
 def main() -> None:
-    init_db()
+    configure_logging(settings.log_level)
     with SessionLocal() as db:
         body = build_digest(db)
-    print(body)
+    print(body)  # the digest text is the job's output, not a log line
     sent = send_digest(body)
-    print(f"\n[sent to webhook: {sent}]")
+    log_event("digest_run", sent=sent, lines=len(body.splitlines()))
 
 
 if __name__ == "__main__":

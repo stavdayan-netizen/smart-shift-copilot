@@ -15,7 +15,7 @@ Plan first · test locally · CI as quality gate · secrets only in Variables ·
 - `web`: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, health `/health`, restart max 5.
 - `Postgres` plugin + volume (alerts at 80/95/100%), backups enabled.
 - `digest`: cron `30 4,5 * * *` UTC with an in-code Israel-local-time guard (DST-safe), `python -m app.digest`.
-- Migration step: `alembic upgrade head` before app start (pre-deploy command or start command prefix); must be idempotent.
+- Migration step: `alembic upgrade head` is now the prefix of the web start command in `.railway/railway.ts` (written in M0-2, not applied to any Railway project). It is idempotent, and `/health` fails if migrations are pending.
 - Cost estimate (instructor's, to re-measure): Railway ≈ $4–6/month; Claude single-digit USD/month with caps.
 
 ## Sequence

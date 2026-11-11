@@ -6,8 +6,8 @@ Common first moves: Railway → service → **Deployments** / **Logs**; filter l
 
 Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/escalate.
 
-## 1. App will not start / health red [EXISTS; log fields PLANNED]
-- **Symptoms:** URL fails, deploy red. **Signals:** deploy logs; PLANNED `app_start` missing, startup `RuntimeError: Missing required variables in production`.
+## 1. App will not start / health red [EXISTS]
+- **Symptoms:** URL fails, deploy red. **Signals:** deploy logs; the `app_start` JSON line is missing (it shows `schema`: `current`, `pending` or `unknown`), startup `RuntimeError: Missing required variables in production`, or `/health` lists `schema: migrations pending`.
 - **Diagnose:** last log lines; compare Variables with `.env.example`. **Recover:** set variable → redeploy; or Redeploy previous green deploy. **Verify:** `/health` 200, login works. **Escalate:** open a `bug` issue with log lines; fix forward via PR.
 
 ## 2. Railway deployment failure [EXISTS]
@@ -43,8 +43,19 @@ Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/esc
 ## 12. Scheduled digest failure [EXISTS for bakery digest; shift digest PLANNED]
 - **Symptoms:** no morning brief. **Signals:** cron service run logs; PLANNED `digest_run` event + `digest_run` audit row; DST guard may skip a duplicate UTC run by design. **Diagnose:** cron expression, service variables (references to web), webhook URL. **Recover:** `POST /internal/digest` with `X-Cron-Secret`. **Verify:** brief contains the section `הגשת משמרות לשבוע הבא` and matches DB counts.
 
-## 13. Database migrations [PLANNED: Alembic]
-- Before deploy: run `alembic upgrade head` against a Postgres copy in CI. Failure at deploy → app won't start: rollback deploy; migrations must be backward compatible with the previous release for one version (expand, then contract). Never edit the production schema by hand.
+## 13. Database migrations [EXISTS: Alembic]
+- **Symptoms:** deploy red at start (`alembic upgrade head` failed in the start command), `/health` 503 with `schema: migrations pending`, `migrations_pending` warning in logs, errors such as "no such table" or `UndefinedTable`.
+- **Signals:** deploy log lines `Running upgrade 000x -> 000y`; `app_start.schema`; `db_error` events (they carry `error_type` only; the exception text is deliberately not logged, so read the deploy log of the failing `alembic` command for the SQL error).
+- **Diagnose:** run `alembic current` and `alembic heads` against the production database (Railway shell or `railway run`). Pending = current is behind head. A failed revision leaves the database at the previous revision (PostgreSQL DDL is transactional).
+- **Recover:** fix forward with a new revision through a PR; do not edit an applied revision and do not change the schema by hand. If the new code is already deployed against an old schema, redeploy the previous release (migrations are written to be backward compatible for one version).
+- **Verify:** `/health` 200 with no `schema:` problem; `alembic current` shows `(head)`; `python -m pytest -q tests/test_migrations.py` green in CI.
+- **Escalate:** a migration that dropped or rewrote data -> restore from backup (section 14) before anything else.
+
+## 13a. Finding what happened to one request [EXISTS]
+1. Every response carries `X-Request-ID`. Ask the user for it, or find it from the time and route in Railway logs (`event: "request"`).
+2. Filter logs by that `request_id`: you see `request` (status, duration), and for chat `copilot_request`, `tool_executed`, `copilot_run` (model, tokens, cost) or `agent_error`/`unhandled_error` (with `error_type` and a message-free stack).
+3. For a business change, the matching `audit_log` row carries the same `request_id`.
+4. Logs never contain passwords, tokens, message text or employee free text; if you need the content, it is in the database (messages, audit_log), not the logs.
 
 ## 14. Backups and restoration [EXISTS (Railway); drill PLANNED]
 - Railway Postgres → Backups → restore into a staging database first → point a staging deploy → verify (login, submissions, schedule) → then production in a quiet hour. **Practice the restore once before relying on it.**

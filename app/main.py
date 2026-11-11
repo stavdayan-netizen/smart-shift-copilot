@@ -17,22 +17,36 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from . import auth, limits
+from .logging_setup import RequestContextMiddleware, configure_logging, log_event, log_exception
 from .agent import get_model_client, run_turn
 from .config import ROOT, settings
-from .db import Conversation, Message, SessionLocal, engine, get_db, init_db
+from .db import Conversation, Message, SessionLocal, engine, get_db
 from .digest import build_digest, send_digest
+from .migrations import schema_status
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.init_report = init_db()
-    # One line in the deploy log, so a first deploy can be checked (docs/deploy-railway.md, step 7).
-    print("seed report: " + ", ".join(f"{k}: {v}" for k, v in app.state.init_report.items()), flush=True)
+    configure_logging(settings.log_level)
+    try:
+        app.state.schema = schema_status(engine)
+    except Exception as exc:  # the database may be down at boot; /health reports it
+        app.state.schema = {"state": "unknown"}
+        log_exception("db_error", exc, where="startup_schema_check")
     app.state.model_client = get_model_client()
+    # One line in the deploy log so a first deploy can be checked (runbook.md section 1).
+    log_event("app_start", env=settings.environment, model=settings.model, provider=settings.model_provider,
+              db="sqlite" if settings.is_sqlite else "postgres", schema=app.state.schema.get("state"),
+              log_level=settings.log_level)
+    if app.state.schema.get("state") == "pending":
+        log_event("migrations_pending", "warning", current=app.state.schema.get("current"), head=app.state.schema.get("head"))
     yield
+    log_event("app_stop")
 
 
+configure_logging(settings.log_level)
 app = FastAPI(title="Smart Shift Copilot", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None)
+app.add_middleware(RequestContextMiddleware)
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 
 
@@ -67,12 +81,22 @@ def health(db: Session = Depends(get_db)):
         db.execute(text("SELECT 1"))
     except Exception as exc:  # pragma: no cover - exercised on a broken deploy, not in tests
         problems.append(f"db: {type(exc).__name__}")
+        log_exception("db_error", exc, where="health")
+    else:
+        try:
+            status = schema_status(engine)
+            if status["state"] != "current":
+                problems.append("schema: migrations pending (run alembic upgrade head)")
+        except Exception as exc:  # pragma: no cover
+            problems.append(f"schema: {type(exc).__name__}")
+            log_exception("db_error", exc, where="health_schema")
     if settings.model_provider == "anthropic" and not settings.anthropic_api_key:
         problems.append("ANTHROPIC_API_KEY missing")
     body = {"status": "ok" if not problems else "degraded", "env": settings.environment, "model": settings.model,
             "provider": settings.model_provider, "db": "sqlite" if settings.is_sqlite else "postgres", "problems": problems,
             "time": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if problems:
+        log_event("health_failed", "warning", problems=problems)
         raise HTTPException(503, body)
     return body
 
@@ -84,6 +108,7 @@ def health(db: Session = Depends(get_db)):
 @app.post("/api/login")
 def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)):
     if not auth.password_ok(payload.password):
+        log_event("auth_failed", "warning", reason="bad_password")
         raise HTTPException(401, "Wrong password.")
     user = auth.get_or_create_user(db, auth.normalise_name(payload.name))
     response.set_cookie(auth.COOKIE_NAME, auth.make_token(user.id, user.name), httponly=True, samesite="lax",
@@ -134,6 +159,7 @@ def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(400, "Say something.")
     limits.check_rate_limit(db, user.id)
     limits.check_daily_cap(db)
+    log_event("copilot_request", user_id=user.id, conversation_id=payload.conversation_id, message_len=len(payload.message))
 
     conv = None
     if payload.conversation_id is not None:
@@ -171,6 +197,7 @@ def stats(request: Request, db: Session = Depends(get_db)):
 def digest(db: Session = Depends(get_db), x_cron_secret: str | None = Header(default=None)):
     """Manual or cron trigger for the morning digest. Protected by CRON_SECRET."""
     if not settings.cron_secret or x_cron_secret != settings.cron_secret:
+        log_event("auth_failed", "warning", reason="bad_cron_secret")
         raise HTTPException(401, "Bad or missing X-Cron-Secret.")
     body = build_digest(db)
     sent = send_digest(body)

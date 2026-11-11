@@ -20,10 +20,10 @@
 | CI | pytest on PR/push; evals if secret set | `.github/workflows/ci.yml` |
 | Railway | IaC `railway.ts`: web + digest cron + Postgres, `/health` | `.railway/railway.ts` |
 | UI | Plain HTML/CSS/JS, **LTR, English**, one `@media (max-width: 900px)` | `static/` |
-| Logging | **`print()` only** — no structured logging | — |
-| Migrations | **None** (`create_all`) | — |
+| Logging | **Structured JSON logs, request IDs, redaction (implemented in M0-2)**; was `print()` only | `app/logging_setup.py` |
+| Migrations | **Alembic (implemented in M0-2)**; was `create_all` | `alembic/`, `app/migrations.py` |
 
-Gaps relative to this project: no structured logs, no migrations, no per-user identity, no RTL/Hebrew, bakery-specific tools/prompt/seed/digest. `cost_usd()` returns **0.0 silently for a model missing from the price table** — must become a loud failure/log (see §11).
+Gaps relative to this project (after M0-2: logging and migrations are done): no per-user identity, no RTL/Hebrew, bakery-specific tools/prompt/seed/digest. `cost_usd()` returns **0.0 silently for a model missing from the price table** — must become a loud failure/log (see §11).
 
 ## 2. Target architecture
 
@@ -54,6 +54,8 @@ One web service (as the instructor decided: UI+API together, ~15 users), one Pos
 - **Agent**: translates manager language into tool calls and explains results. Cannot write approved/published data directly.
 
 ## 4. Database schema (planned; PostgreSQL production, SQLite for fast local tests)
+
+**Implemented so far (M0-2, migration `0001_baseline`):** `users`, `conversations`, `messages`, `runs` (the instructor's tables, unchanged) and `audit_log`. Everything else in the table below is planned for M0-3 and M1-1. The schema is owned by Alembic: the app no longer calls `create_all`, and a test fails if a model differs from the migrations.
 
 **Simplified from the first proposal (~18 tables) to 12 application tables** (+ Alembic's `alembic_version`). Rule used: keep a table when it carries integrity constraints, security, audit, or agent-usage data; fold it into a JSON column or derive it when it only holds a small blob that is always read together with its parent; defer it when it only serves a deferred feature.
 
@@ -154,8 +156,23 @@ Time source: a single `clock.now()` function; a `CLOCK_OVERRIDE` variable honore
 
 ## 9. Observability
 
-Python `logging` with a JSON formatter (stdout → Railway logs), a middleware assigning `request_id` (also returned as `X-Request-ID`, copied into agent/tool logs as `correlation_id`). Fields: `ts, level, event, request_id, actor_id (numeric), week_id, duration_ms, error_type`, plus `model, effort, tokens, cost_usd` for model calls. Events: `app_start/app_stop, auth_failed, availability_submitted, deadline_state, change_request_created/decided, draft_generated, schedule_validation_failed, schedule_published, copilot_request, tool_selected/tool_executed, agent_error, anthropic_retry/failure, db_error, digest_run, health_failed`.
-**Never logged:** passwords, codes, API keys, cookies/tokens, free-text requests (log length/hash only), employee personal details beyond numeric ids, full prompts. A redaction filter + a test that scans captured logs for planted secrets/free text. **Operational logs ≠ audit**: logs are best-effort and rotate on Railway; `audit_log` and `runs` (with `tool_trace`) are database records.
+**Implemented in M0-2.** Operational logging lives in `app/logging_setup.py`; the business audit record lives in `app/audit.py` and the `audit_log` table. They are deliberately separate.
+
+### Operational logs (diagnosis; best effort; stdout, collected by Railway)
+- One JSON object per line: `ts` (UTC, ms), `level`, `event`, `request_id` (when inside a request), plus event-specific safe fields. Third-party and uvicorn log lines are wrapped in the same JSON shape (`event: "log"`); uvicorn's access log is replaced by our own `request` event.
+- **Request ID:** a pure-ASGI middleware creates one per request (or reuses a caller-supplied `X-Request-ID` only if it matches `[A-Za-z0-9._-]{8,64}`), returns it as the `X-Request-ID` response header, and stores it in a context variable so every log line and every audit row written during the request carries it. This is the correlation ID: one request id links the `request`, `copilot_request`, `tool_executed`, `copilot_run` and `audit_recorded` lines of one user action.
+- **Events implemented now:** `app_start`, `app_stop`, `request` (method, route template, status, duration_ms), `auth_failed` (reason only), `health_failed`, `db_error`, `migrations_pending`, `unhandled_error`, `copilot_request` (user id, conversation id, message length), `tool_executed` (tool, status, duration_ms, error_type), `copilot_run` (status, model, effort, tokens, estimated cost, tool calls, duration), `agent_error`, `digest_run`, `audit_recorded`.
+- **Events planned with their features** (names reserved): `availability_submitted`, `deadline_state`, `change_request_created/decided`, `draft_generated`, `schedule_validation_failed`, `schedule_published`, `anthropic_retry/failure` (the SDK retries internally today, so only the final failure is visible as `agent_error`), `unknown_model_price`.
+- **Redaction (`redact()`):** keys named like credentials (`password`, `token`, `cookie`, `authorization`, `api_key`, `*_secret`, `code`, ...) become `[redacted]`; private text keys (`message`, `prompt`, `content`, `free_text`, `note`, ...) are reduced to their length; strings are scrubbed for `sk-ant-...`, bearer tokens and `session=...` pairs and truncated at 500 characters. Token *counts* (`input_tokens`) are not secrets and are kept.
+- **Exceptions** are logged as `error_type` plus a message-free stack (`file:line in function`). The exception message is never logged, because database errors embed SQL parameters and could carry employee data.
+- **Never logged:** passwords, access codes, API keys, cookies or session tokens, free-text requests, full user messages, full prompts, employee personal details beyond numeric ids. Tests plant a password, a session token and a private sentence and assert none appears in captured logs.
+- `LOG_LEVEL` (default `INFO`) sets the level. Logs are not a system of record: Railway rotates them.
+
+### Audit records (business record; durable; database)
+- `audit_log` rows: `at`, `actor_id`, `action`, `entity`, `entity_id`, `request_id`, `before_json`, `after_json`. Append-only: the ORM refuses updates and deletes. (A database-level trigger or role grant is not added yet; see limitations in the PR.)
+- **Atomic with the change.** `audit.record()` adds the row to the *caller's* transaction and flushes it; it never commits. `with audited(db): ... record(...)` commits the mutation and its audit row together, or rolls both back. If writing the audit row fails, the exception propagates and the mutation is rolled back. A block that finishes without any audit row raises `AuditMissing` and is rolled back, so a critical mutation cannot succeed silently.
+- Payloads may contain business text (it is the record) but credentials are always redacted. Payloads are **never** copied into operational logs: the log gets only `audit_recorded` with the audit id, action, entity and entity id.
+- Use it for every critical mutation in later issues (post-deadline changes, change-request decisions, draft, publish, confirmed schedule changes, digest runs).
 
 ## 10. Railway and environment
 
@@ -163,7 +180,7 @@ Services (extending instructor's `railway.ts`, to be edited at implementation �
 
 Digest scheduling vs DST: Railway cron is UTC. Proposed: one cron expression `30 4,5 * * *` (runs at 04:30 and 05:30 UTC) and `app.digest` exits immediately unless local time in `Asia/Jerusalem` is 07:30±30 min and no `digest_run` audit row exists today. Costs seconds per day.
 
-Variables (names only): `APP_ENV, APP_SECRET, MANAGER_PASSWORD (replaces APP_PASSWORD), DATABASE_URL, ANTHROPIC_API_KEY, MODEL, MODEL_EFFORT, MAX_TOKENS, HISTORY_LIMIT, RATE_LIMIT_PER_HOUR, DAILY_CAP_USD, TIMEZONE, CRON_SECRET, DIGEST_WEBHOOK_URL, LOG_LEVEL, CLOCK_OVERRIDE (non-prod only), MODEL_PROVIDER (tests: fake)`. `.env.example` lists names without values.
+Variables (names only): `APP_ENV, APP_SECRET, MANAGER_PASSWORD (replaces APP_PASSWORD), DATABASE_URL, ANTHROPIC_API_KEY, MODEL, MODEL_EFFORT, MAX_TOKENS, HISTORY_LIMIT, RATE_LIMIT_PER_HOUR, DAILY_CAP_USD, TIMEZONE, CRON_SECRET, DIGEST_WEBHOOK_URL, LOG_LEVEL (implemented), TEST_DATABASE_URL (tests only), CLOCK_OVERRIDE (non-prod only), MODEL_PROVIDER (tests: fake)`. `.env.example` lists names without values.
 
 Deployment plan: `docs/deployment-plan.md`. Early deploy target (D1): after the availability form and the read-only Copilot work (M1 + M2 in `ROADMAP.md`).
 

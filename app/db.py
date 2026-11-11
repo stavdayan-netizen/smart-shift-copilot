@@ -1,14 +1,15 @@
-"""Database layer: models, engine, session and startup schema creation.
+"""Database layer: models, engine and session.
 
-Postgres on Railway (DATABASE_URL from the plugin) or SQLite locally. The
-schema is created at start with `create_all`; `schema_version` records which
-version is live so a later real migration tool has somewhere to start.
+Postgres on Railway (DATABASE_URL from the plugin) or SQLite locally. The schema is
+owned by Alembic (alembic/versions); the app never creates tables itself. Every
+model change needs a migration (practice.md section 6); a test fails if they drift.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Float,
     ForeignKey,
@@ -16,14 +17,10 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
-    func,
-    select,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from .config import settings
-
-SCHEMA_VERSION = 1
 
 
 def utcnow() -> datetime:
@@ -32,12 +29,6 @@ def utcnow() -> datetime:
 
 class Base(DeclarativeBase):
     pass
-
-
-class SchemaVersion(Base):
-    __tablename__ = "schema_version"
-    version: Mapped[int] = mapped_column(Integer, primary_key=True)
-    applied_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class User(Base):
@@ -89,6 +80,21 @@ class Run(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
+class AuditLog(Base):
+    """Append-only business audit record (app/audit.py). Written in the same transaction as the change."""
+
+    __tablename__ = "audit_log"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(60), index=True)
+    entity: Mapped[str] = mapped_column(String(60))
+    entity_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # links an audit row to its log lines
+    before_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    after_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+
+
 # ---------------------------------------------------------------------------
 # Engine and session
 # ---------------------------------------------------------------------------
@@ -111,19 +117,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-# ---------------------------------------------------------------------------
-# Startup: schema, version, seed data
-# ---------------------------------------------------------------------------
-
-def init_db(bind=None) -> dict:
-    """Create tables and record the schema version. (Alembic replaces this in M0-2.)"""
-    bind = bind or engine
-    Base.metadata.create_all(bind)
-    report = {"schema_version": SCHEMA_VERSION}
-    with Session(bind) as db:
-        if db.scalar(select(func.count()).select_from(SchemaVersion)) == 0:
-            db.add(SchemaVersion(version=SCHEMA_VERSION))
-            db.commit()
-    return report

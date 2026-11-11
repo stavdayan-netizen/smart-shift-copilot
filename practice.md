@@ -49,13 +49,29 @@ Adapted from the instructor's eight-step ticket loop. `CLAUDE.md` points here. *
 - **Model-dependent evals** (`python -m evals.run`, real model, costs money): tool selection, Hebrew request interpretation, hard-constraint refusal, unavailable employee, ambiguity → clarification, preference explanations match stored facts, confirmation before modification, no fabricated data, cost/latency. Run only when prompt/tools/model change **and the owner approved the spend**; paste pass rate and tokens in the PR.
 - Never mix them: evals are not part of the default test command.
 
-## 6. Logging and operations
+## 6. Logging, audit, migrations and operations
 
-- Add structured log events for every new workflow (names in `architecture.md` §9) with `request_id`; no secrets, tokens, or free-text requests in logs (a test enforces this).
-- Audit-worthy business actions go to `audit_log` (database), not only to logs.
+**Operational logs** (`app/logging_setup.py`):
+- Log with `log_event("name", key=value)` or `log_exception("name", exc)`. Never `print()` and never `logging.info(f"... {user_text}")`.
+- Every new workflow gets named events (list in `architecture.md` §9). The request ID is added automatically.
+- Never put passwords, codes, tokens, cookies, API keys, free-text requests, full messages or prompts in a log field. `redact()` is a safety net, not permission. Log lengths, ids and counts instead. Do not log exception messages (use `log_exception`).
+- A test that plants a secret and a private sentence and checks the captured logs must keep passing; extend it when you add a workflow that handles private text.
+
+**Audit records** (`app/audit.py`):
+- Every critical business mutation (anything a manager or the manager's approval decides, or that changes what an employee sees about their shifts) writes an `audit_log` row **in the same transaction**: `with audited(db): <mutate>; record(...)`. Do not commit between the mutation and the audit row. A failing audit write must fail the mutation.
+- Business facts are proved by `audit_log`, never by logs. Never copy audit payloads into logs.
+
+**Migrations** (Alembic):
+- Every change to a model or constraint is a new Alembic revision in `alembic/versions/`. Never edit an applied revision, and never create tables with `create_all`.
+- Create it with `alembic revision --autogenerate -m "..."`, then read and fix the generated file by hand (names, defaults, data backfills, indexes).
+- Migrations must be backward compatible with the previous release for one version (add first, remove later), because a rollback redeploys the old code against the new schema.
+- `tests/test_migrations.py` fails if models and migrations disagree. CI also runs `alembic upgrade head` and `alembic check` on an empty PostgreSQL.
+- Run on PostgreSQL before merge: CI runs the whole suite on SQLite and on PostgreSQL 16; both jobs must be green. PostgreSQL-only behaviour (constraints, partial indexes, transactions) cannot be verified on a machine without Postgres, so rely on CI, and say so in the PR when something was only checked on SQLite.
+
+**Operations:**
 - New failure mode → add a `runbook.md` entry in the same PR.
 - New env var → add its name to `.env.example` and `architecture.md` §10 (names only).
-- Verify an induced error can be diagnosed from logs alone.
+- Verify an induced error can be diagnosed from logs alone (find it by `request_id`).
 
 ## 7. Cost management
 
@@ -85,7 +101,7 @@ cp .env.example .env                 # fill values; never commit
 python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
 uvicorn app.main:app --reload        # http://localhost:8000
 pytest -q                            # model mocked
-alembic upgrade head                 # once Alembic lands (M0)
+alembic upgrade head                 # apply migrations (the app does not create tables)
 python -m evals.run                  # costs money; owner approval required
 python -m app.digest                 # print today's brief
 ```

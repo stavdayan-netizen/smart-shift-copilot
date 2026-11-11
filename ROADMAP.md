@@ -1,6 +1,6 @@
 # ROADMAP.md
 
-Status as of 2026-11-11: **plan approved; M0-1 (fork cleanup) done pending review; no Smart Shift feature is implemented.** The code is the instructor's infrastructure with the bakery domain removed. Per-issue detail: `docs/tickets.md`. Scope: `spec.md`.
+Status as of 2026-11-11: **plan approved; M0-1 (fork cleanup) is done and merged; M0-2 (logging, Alembic, PostgreSQL CI, audit log) is in review; no Smart Shift feature is implemented.** The code is the instructor's infrastructure with the bakery domain removed. Per-issue detail: `docs/tickets.md`. Scope: `spec.md`.
 
 ## Phase 1 — MVP (approved)
 
