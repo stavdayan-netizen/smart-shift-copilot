@@ -1,3 +1,5 @@
+> **Inherited reference** from the instructor's Bakery Copilot; not yet adapted to Smart Shift Copilot.
+
 # Watch — the six numbers, every Friday
 
 One row per week. The trend is the only early warning a small product gets (Lesson 9, slide 30).

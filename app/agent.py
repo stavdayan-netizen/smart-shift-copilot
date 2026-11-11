@@ -14,7 +14,6 @@ seam that lets tests replace the model with a scripted fake.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from dataclasses import dataclass, field
@@ -29,7 +28,6 @@ from .config import ROOT, settings
 from .costs import Usage, cost_usd
 from .db import Conversation, Message, Run, User, utcnow
 from .tools import registry
-from .tools.sales import branches, data_range
 
 try:  # the SDK is optional at import time so tests run without it configured
     import anthropic
@@ -39,8 +37,7 @@ except ImportError:  # pragma: no cover
 MAX_TOOL_ROUNDS = 6
 SYSTEM_PATH = ROOT / "app" / "prompts" / "system.md"
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"}
-REFUSAL_TEXT = ("I can't help with that request. If it is about sales or invoices, try rephrasing it; "
-                "for anything else, ask Dana.")
+REFUSAL_TEXT = "I can't help with that request. Try rephrasing it, or ask the manager."
 
 
 # ---------------------------------------------------------------------------
@@ -134,11 +131,8 @@ def get_model_client() -> ModelClient:
 # ---------------------------------------------------------------------------
 
 def build_system(db: Session) -> list[dict]:
-    d_from, d_to = data_range(db)
     today = datetime.now(ZoneInfo(settings.timezone)).date()
     text = (SYSTEM_PATH.read_text(encoding="utf-8")
-            .replace("{{DATA_FROM}}", str(d_from or "unknown")).replace("{{DATA_TO}}", str(d_to or "unknown"))
-            .replace("{{BRANCHES}}", ", ".join(branches(db)) or "unknown")
             .replace("{{TODAY}}", today.isoformat()))
     # One cached block: tools + system form the stable prefix every turn reuses.
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
@@ -177,14 +171,6 @@ def _summarise_result(result_text: str) -> str:
         return result_text[:90]
     if "error" in r:
         return f"error: {str(r['error'])[:80]}"
-    if "status" in r and "created" in r:  # log_invoice
-        return f"{'created' if r['created'] else r.get('reason', 'existing')} · {r['status']}" + (" · flagged" if r.get("flagged") else "")
-    if "matches" in r:  # lookup_supplier
-        return f"{len(r['matches'])} match" + ("" if len(r["matches"]) == 1 else "es")
-    if "row_count" in r:  # sales_query grouped
-        return f"{r['row_count']} rows · {r['metric']} by {r['group_by']}"
-    if "value" in r:  # sales_query total
-        return f"{r['metric']} = {r['value']}"
     return result_text[:90]
 
 
@@ -201,38 +187,28 @@ def _friendly(exc: Exception) -> str:
     return "Something went wrong on our side. The error was recorded; try again."
 
 
-def run_turn(db: Session, *, user: User, conversation: Conversation | None, text: str, image: dict | None,
+def run_turn(db: Session, *, user: User, conversation: Conversation | None, text: str,
              client: ModelClient) -> Iterator[dict]:
     """Yield SSE-ready events for one user turn. See the module docstring for the contract."""
     started = time.monotonic()
     text = (text or "").strip()
-    image_ref = f"img_{hashlib.sha256(image['data'].encode()).hexdigest()[:10]}" if image else None
 
     if conversation is None:
-        conversation = Conversation(user_id=user.id, title=(text or "Invoice photo")[:60])
+        conversation = Conversation(user_id=user.id, title=(text or "New chat")[:60])
         db.add(conversation)
         db.commit()
         db.refresh(conversation)
     yield {"type": "meta", "conversation_id": conversation.id, "title": conversation.title}
 
     # 1. The user's message is saved first: it counts for the rate limit even if the stream dies.
-    stored = text + (f"\n[image {image_ref}]" if image_ref else "")
-    user_msg = Message(conversation_id=conversation.id, user_id=user.id, role="user",
-                       content=stored or "(invoice photo)", has_image=bool(image))
+    user_msg = Message(conversation_id=conversation.id, user_id=user.id, role="user", content=text or "(empty)")
     db.add(user_msg)
     conversation.updated_at = utcnow()
     db.commit()
 
-    # 2. Context: cached system block, capped history, the new message (with the image, if any).
+    # 2. Context: cached system block, capped history, the new message.
     messages = _history(db, conversation.id, user_msg.id)
-    content: list[dict] = []
-    if image:
-        content.append({"type": "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}})
-    prompt_text = text or "Please read this invoice and log it."
-    if image_ref:
-        prompt_text += f"\n\n(image reference: {image_ref})"
-    content.append({"type": "text", "text": prompt_text})
-    messages.append({"role": "user", "content": content})
+    messages.append({"role": "user", "content": [{"type": "text", "text": text}]})
     system = build_system(db)
     tools = registry.TOOLS
 

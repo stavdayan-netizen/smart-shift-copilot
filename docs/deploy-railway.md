@@ -1,3 +1,5 @@
+> **Inherited reference.** This guide was written for the instructor's Bakery Copilot. Service names, variable values, prices and the "bakery" wording are not ours; adapt them before use. Our plan is `docs/deployment-plan.md`. Nothing here has been run for Smart Shift Copilot.
+
 # Deploying Bakery Copilot on Railway
 
 How to put this app on Railway from nothing, where every secret goes, and the Railway CLI commands for the first deploy and for day two. `architecture.md` ("Hosting", "Secrets") records the decisions; `runbook.md` is for when it breaks; this file is the walkthrough. It describes the project as it runs on 2026-10-27, with Railway CLI 5.71.

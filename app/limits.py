@@ -1,5 +1,4 @@
-"""The three limits from architecture.md: per user per hour, per day in money,
-and the file size at the door. (The per-minute limit towards Anthropic is
+"""The limits from architecture.md: per user per hour and per day in money. (The per-minute limit towards Anthropic is
 handled by the SDK's retries plus the backoff in agent.py.)
 """
 from __future__ import annotations
@@ -44,11 +43,3 @@ def check_daily_cap(db: Session) -> None:
     spent = spend_today_usd(db)
     if spent >= settings.daily_cap_usd:
         raise HTTPException(402, f"Today's budget (${settings.daily_cap_usd:.2f}) is used up. Back tomorrow.")
-
-
-def check_upload_size(data_b64: str | None) -> None:
-    if not data_b64:
-        return
-    approx_bytes = len(data_b64) * 3 // 4
-    if approx_bytes > settings.max_upload_mb * 1024 * 1024:
-        raise HTTPException(413, f"Image is larger than {settings.max_upload_mb} MB.")
