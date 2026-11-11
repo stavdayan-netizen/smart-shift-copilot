@@ -1,51 +1,48 @@
-# Tickets — Bakery Copilot
+# Tickets — Smart Shift Copilot
 
-The spec broken into tickets a stranger could test, grouped by milestone. Each becomes a GitHub Issue on the project board (To do / In progress / Done). `scripts/create_issues.sh` creates them with `gh` once the repo exists.
+The GitHub Issues are the source of truth once created; this file is the planning summary. Board: **Smart Shift Copilot** (To do · In progress · Done). Labels: `phase-1`, `phase-2`, `enhancement`, `bug`, `documentation`. Phase 2 issues are deferred and stay in To do. Every ticket obeys `practice.md` (mobile-first DoD for UI, tests on SQLite and Postgres, structured logging, runbook, no unapproved scope). Nothing runs paid Anthropic calls without separate approval.
 
-Format: **title** · label · done when.
+Legend: ★ essential for course submission · ◇ deferrable.
 
-## Milestone v1 — chat
+## Phase 1
 
-1. **Project skeleton: FastAPI app, config from env, health endpoint** · chore · `GET /health` returns 200 locally; settings load from `.env`.
-2. **Database models and startup seed** · feature · tables created at start; `sales` has 29,115 rows; `suppliers` has 10.
-3. **Login with team password and typed name** · feature · right password sets a cookie; wrong password 401; name 2–40 chars.
-4. **Conversations list and messages API** · feature · a user sees only their conversations; messages return in order.
-5. **Chat turn with streaming (SSE)** · feature · first token under 2 s on a 3-turn chat; full reply saved once; dropped connection leaves no half-row.
-6. **Static chat UI: sidebar, bubbles, composer** · feature · works on a phone width; Enter sends, Shift+Enter newline.
-7. **Markdown rendering of replies** · feature · lists and tables render; plain text falls back when the CDN is blocked.
-8. **System prompt with today's date and data range** · feature · the prompt names the dataset's first and last dates.
+**M0 Foundation ★**
+1. **M0-1 Fork cleanup and baseline** — remove bakery domain code/data/tools/prompt, repoint `.railway/railway.ts` and docs to our fork, keep the instructor's tests green or adapted. Done when: app starts, suite passes, baseline result recorded.
+2. **M0-2 Logging, Alembic, Postgres CI** — JSON logs with request IDs and redaction (planted-secret test), Alembic baseline migration, CI runs pytest on SQLite and Postgres.
+3. **M0-3 Per-employee authentication** — scrypt-hashed codes, manager password from env, lockout and per-IP throttle, no user enumeration, `require_employee`/`require_manager`, route-inventory test, cross-employee denial tests, `auth_failed` logs.
+4. **M0-4 Hebrew RTL mobile shell** — `lang=he dir=rtl`, mobile navigation, logical CSS, legal-compliance notice; 360/390/768/desktop checks recorded.
 
-## Milestone v2 — tools
+**M1 Availability ★**
+5. **M1-1 Schema, seed and deadline service** — the 12 tables, 8 fictional employees, Morning/Evening × 2 staff, deadline function for Tuesday 22:00 Asia/Jerusalem (DST-week and boundary tests), `clock.now()` with non-production override.
+6. **M1-2 Availability form and API** — exact Hebrew heading and notices, real dates, day shortcuts, min/max, free text, server-enforced lock after the deadline, audit/log events. Mobile DoD.
 
-9. **`sales_query` tool: metric, grouping, filters** · feature · totals match the dataset (₪647,065 · 14,421 orders · 40,194 items); unknown metric returns an error, not an exception.
-10. **`lookup_supplier` tool** · feature · partial, case-insensitive match; unknown name returns `known_supplier: false`.
-11. **`log_invoice` tool with dedup, needs-a-look and flag rules** · feature · same `source_ref` twice is one row; null amount → `needs_a_look`; > ₪5,000 → `flagged`.
-12. **Tool loop in the agent (max 6 rounds), tool events to the UI** · feature · the UI shows a chip per tool call; the run row counts tool calls.
-13. **Image upload: base64 in the turn, reference string, not stored** · feature · a PNG under 5 MB reaches the model; the saved message has `has_image`.
-14. **Invoices panel in the UI** · feature · last 50 invoices with status and flag badges.
-15. **Eval cases and runner** · chore · `python -m evals.run` grades 10 cases and appends to `history.csv`.
+**M2 Copilot v1 ★ (course core)**
+7. **M2-1 Agent loop adaptation with read-only tools** — manager-only chat, Hebrew prompt, `get_submission_status` and `get_availability`, `runs.tool_trace`, cost accounting (unknown model price is an error), model/effort from env (Sonnet 5.5 / high candidate), fake-model tests, eval cases written but **not run** without approval. Mobile chat check.
 
-## Milestone v3 — limits and deploy
+**D1 Deploy ★**
+8. **D1 First Railway deploy** — needs owner approval before creating resources. Done when: public URL, `/health` 200, form usable on a real phone, rollback tried once.
 
-16. **Per-user hourly rate limit** · feature · the 31st message in an hour returns 429 with a clear message.
-17. **Daily spend cap from the runs table** · feature · at the cap the chat returns 402 "back tomorrow".
-18. **Cost per run from a price table** · feature · `cost_usd` on every run; unknown model costs 0 and logs a warning.
-19. **Dockerfile, railway.json, health check** · chore · the service builds on Railway and passes `/health`.
-20. **Morning digest: CLI + protected endpoint** · feature · six lines; wrong `X-Cron-Secret` is 401; webhook POST when configured.
-21. **CI: tests on every PR, evals when the key is present** · chore · a failing test blocks the merge; evals skip cleanly without a key.
-22. **Runbook and first-week watch table** · chore · `runbook.md` has six entries; a `docs/watch.md` table with the six Friday numbers.
-23. **Infrastructure as Code: `.railway/railway.ts` replaces `railway.json`** · chore · `railway config plan` reports no drift; the digest service has start command `python -m app.digest` and schedule `30 4 * * *`; no `railway.json` or `railway.cron.json` in the repo.
-24. **Deploy guide: `docs/deploy-railway.md`** · chore · one document covers the first deploy with the CLI, every variable and secret with where it is set, the dashboard path, day-two operations and troubleshooting; README links to it.
-25. **Session token survives a '|' byte in the signature** · bug · a token reads back for 1,000 consecutive seconds; `pytest -q` is green 20 runs in a row.
-26. **Windows instructions** · chore · README, `practice.md` and `docs/deploy-railway.md` give PowerShell commands wherever Windows differs from macOS and Linux; shell scripts keep LF line endings on Windows checkouts (`.gitattributes`).
-27. **.env loader drops inline comments** · bug · a copy of `.env.example` loads with `load_settings()`; a quoted value keeps a `#`.
-28. **Public repository** · chore · the history is one commit under GitHub's noreply address; no personal email, live URL or workspace name in any tracked file; Railway deploys from the new repo.
-30. **Assistant stops re-checking and retracting answers it already checked (issue #2)** · bug · eval cases can carry earlier turns (`history`); `no_recheck_after_off_topic` and `no_false_retraction` pass; `no_number_without_tool` still passes; `pytest -q` is green.
-31. **System prompt names the branches; the assistant stops inventing them (issue #3)** · bug · `build_system()` output contains the four branch names from the data; the eval `no_invented_branch` passes; `pytest -q` is green.
-32. **Deploy guide checks that work: seed report in the log, SSH key for the private database (issue #4)** · bug · startup prints `seed report: … sales_seeded: N` (tested); `docs/deploy-railway.md` gets from no SSH key to a row count with each command listed, and no longer says a local `railway run` can read the database.
+**M3 Scheduling ★**
+9. **M3-1 Manager dashboard** — submission status, non-submitters, preferences, staffing requirement vs availability and gaps; usable at 360px.
+10. **M3-2 Scheduling engine and validator** — deterministic greedy plus repair, independent validator, property tests for hard constraints, unfilled slots with reasons, facts in `schedules.run_json`.
+11. **M3-3 Draft/publish and schedule views** — draft refused before the deadline, explicit publish confirmation, draft vs published labels, day-by-day mobile view, employees see only their own shifts, audit rows.
 
-## Later (not scheduled)
+**M4 Copilot v2 ★**
+12. **M4-1 Scheduling tools and confirmed changes** — gaps, schedule, draft generation, replacements, explanations, `propose_change` and UI confirmation with re-validation; no write without confirmation. Evals (approval required to run).
 
-- Alembic migrations once production data exists.
-- Conversation purge at 90 days.
-- Per-client deployment template (second bakery).
+**M5 Change requests**
+13. **M5-1 Post-deadline change requests** — separate screen, structured items, pending/approved/rejected, approval re-validates and updates availability, conflicts with published shifts surfaced not auto-resolved, copy states it is not a cancellation.
+
+**M6 Daily brief ◇**
+14. **M6-1 Deterministic daily brief and cron** — section titled `הגשת משמרות לשבוע הבא`, DB facts only, DST-safe schedule, idempotent via audit row.
+
+**M7 Hardening ◇**
+15. **M7-1 Evals baseline, runbook verification, final responsive pass** — spend approved first; each runbook entry marked verified or planned.
+
+## Phase 2 (deferred; To do)
+16. **P2-1 Automatic initial draft after the Tuesday deadline**
+17. **P2-2 Employee administration (create, delete, freeze)**
+18. **P2-3 Permanent employee profile settings**
+19. **P2-4 Availability form restrictions from profile settings**
+
+The instructor's `scripts/create_issues.sh` is bakery-specific; it is not used for this list.

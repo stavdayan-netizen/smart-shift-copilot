@@ -1,50 +1,93 @@
-# practice.md — how work is done on this project
+# practice.md — working agreement for all development (Claude Code and humans)
 
-Lesson 4's loop, grown up. Every ticket, by you or by Claude Code, goes through these eight steps. `CLAUDE.md` points here; this file is the process.
+Adapted from the instructor's eight-step ticket loop. `CLAUDE.md` points here. **This file is mandatory.** If a task conflicts with it, `spec.md`, or `ROADMAP.md`, stop and ask.
 
-## On every ticket
+## 1. Git workflow
 
-1. **Read the issue.** Restate it in one line. If it does not fit `spec.md`, stop and say so; do not widen the ticket.
-2. **Plan.** Three to five lines naming the files you will touch and the test you will add. Wait for approval before writing code.
-3. **Branch.** `git checkout -b <issue>-<slug>` from an up-to-date `main`, e.g. `12-stream-reply`.
-4. **Build** the smallest change that meets the ticket's "Done when" lines. No drive-by refactors.
-5. **Test.** Run `pytest -q`. Add the test the ticket names. If the system prompt, the tools, the model or the effort changed, also run `python -m evals.run` and paste the pass rate.
-6. **Docs.** If a decision changed, update `architecture.md` in the same commit (drawing, limits or the decisions table). If a check changed, update `spec.md` §7.
-7. **Commit.** One ticket, one commit, the number in the message: `Stream chat reply token by token (#12)`.
-8. **Pull request.** Diff, test output, eval numbers, the issue link. A bug found on the way becomes a new issue, labelled `bug`, linked from the PR; it is not fixed silently in this branch.
+- `main` is always deployable. Never commit or push to `main` directly; merge via PR with CI green.
+- One ticket → one branch `<issue>-<slug>` (e.g. `7-availability-form`) → focused commits → one PR with the issue link.
+- Remotes: `origin` = our fork (`stavdayan-netizen/smart-shift-copilot`); `upstream` = instructor's repo, read-only reference. Never push to `upstream`.
+- Before opening a PR run the relevant tests (§5). PR body: what changed, test output, mobile/RTL checklist results (§3), docs touched, security note.
+- **Do not implement anything not in an approved ticket / `spec.md` Phase 1.** Phase 2 and the exclusions in `spec.md` §11 are off limits. New ideas become a proposed issue, not code.
+- Keep docs in the same commit as the code that changes them (`architecture.md`, `spec.md` §13 checks, `runbook.md`, `.env.example`, `ROADMAP.md` status).
+- Per ticket: read the issue → restate in one line → 3–5 line plan (files + tests) → get approval → branch → smallest change → test → docs → commit → PR.
 
-## Never
+## 2. Never
 
-- Edit `.env`, print a secret, or paste a key into chat, a file or a commit message. If a key reaches Git history: rotate it first, then clean history (runbook.md).
-- Modify `data/` or anything under the `sales` table. The dataset is read-only.
-- Push to `main`. Merge through a PR only, with CI green.
-- Skip step 5. A red test is a stop, not a note.
-- Change the model, effort or system prompt without an eval run before and after.
-- Write a number into a reply without a tool result behind it (this applies to the agent; the eval `no_number_without_tool` checks it).
+- Edit `.env`, print/paste a secret, or commit one. Leak → rotate first, then clean history (`runbook.md`).
+- Put real personal data in the repo. Demo data is fictional.
+- Rely on hidden UI for authorization. Every manager route is protected server-side.
+- Execute model-generated SQL; let the model write approved/published assignments.
+- Change model, effort or system prompt without an eval run before and after (owner-approved spend).
+- Run paid model comparisons or evals without owner approval.
+- Skip a failing test, or mark UI work done without the §3 checks.
 
-## Reviewing a PR (yours or Claude Code's)
+## 3. Mobile-first Definition of Done (every UI task)
 
-- Does the diff do only what the ticket says?
-- Is there a test for each "Done when" line, and does it fail without the change?
-- Did `architecture.md` change if a decision did?
-- Are the three numbers in the PR: tests passed, eval pass rate against the baseline, tokens per eval run?
-- Does `grep -rn "sk-ant" .` come back empty (in PowerShell, `git grep -n "sk-ant"`, which checks tracked files), and is `.env` still untracked?
+1. Designed mobile-first (base CSS = phone; wider layouts via `min-width` queries).
+2. Natural Hebrew copy; `lang="he" dir="rtl"`; logical CSS properties; numbers, times and dates render correctly in RTL.
+3. Verified at **360, 390, 768 px and desktop** (≥ 1280).
+4. No unintended horizontal overflow at any of them (`document.documentElement.scrollWidth <= innerWidth`).
+5. Usable mobile navigation, forms, chat, dialogs and schedule views; no wide tables (day-by-day cards on narrow screens); touch targets ≥ 44×44 px; labels on controls; conflicts stay visible.
+6. Pass visual and functional checks (browser pane or Chrome, screenshots or accessibility-tree checks, plus an automated overflow/viewport test where feasible).
+7. Any check not actually performed is written in the PR as **"NOT VERIFIED: …"**.
+8. A UI task is **incomplete** until the required checks pass or the owner accepts the listed gaps.
 
-## Local commands
+**Never claim visual testing was performed unless it was.** State the tool used and the widths covered.
+
+## 4. Code quality and safety
+
+- Every new behaviour has tests; failures are handled explicitly (no bare `except`, no silent fallbacks).
+- Validate all inputs server-side (Pydantic, length caps, enum/range checks).
+- Authorization tests for each new route: own data OK; another employee's data denied; employee → manager route denied.
+- Critical scheduling operations go through the deterministic validator. No silent changes to approved or published schedules; every such change writes an `audit_log` row.
+- Deadline logic only through the deadline service and `clock.now()`; never compare dates ad hoc. Tests cover Israel DST transitions and the boundary second.
+
+## 5. Tests
+
+- **Deterministic tests** (`pytest -q`, model mocked, no network, no key): engine, validator (property tests: no output violates H1–H3), deadline/DST, auth matrix, API, tools, digest, log redaction. Must pass on SQLite **and** PostgreSQL (CI runs both).
+- **Model-dependent evals** (`python -m evals.run`, real model, costs money): tool selection, Hebrew request interpretation, hard-constraint refusal, unavailable employee, ambiguity → clarification, preference explanations match stored facts, confirmation before modification, no fabricated data, cost/latency. Run only when prompt/tools/model change **and the owner approved the spend**; paste pass rate and tokens in the PR.
+- Never mix them: evals are not part of the default test command.
+
+## 6. Logging and operations
+
+- Add structured log events for every new workflow (names in `architecture.md` §9) with `request_id`; no secrets, tokens, or free-text requests in logs (a test enforces this).
+- Audit-worthy business actions go to `audit_log` (database), not only to logs.
+- New failure mode → add a `runbook.md` entry in the same PR.
+- New env var → add its name to `.env.example` and `architecture.md` §10 (names only).
+- Verify an induced error can be diagnosed from logs alone.
+
+## 7. Cost management
+
+- No unnecessary Anthropic calls; anything that can be deterministic is. Gate and cache free-text analysis.
+- Every call records tokens and estimated cost in `runs`; an unknown model price is an error, not 0.
+- Respect `DAILY_CAP_USD` and rate limits; do not raise them without owner approval.
+
+## 8. Definition of Done (feature)
+
+A ticket is done only when **every** item below is satisfied or explicitly listed in the PR as "NOT VERIFIED" with the owner's acceptance:
+
+1. **Works** as the ticket's "Done when" says, and nothing outside approved scope was added.
+2. **Mobile-first and Hebrew RTL** (§3) for any UI.
+3. **Tests**: new deterministic tests pass on **SQLite and PostgreSQL** (CI shows both green). Appropriate model Evals are written for agent behaviour and run only with approved spend.
+4. **Deterministic scheduling validation** applied to every scheduling operation; **no unauthorized schedule modification** (model never writes approved or published assignments; manager confirmation required; audit row written).
+5. **Safe authentication and authorization**: server-side checks on every new route, cross-employee access tests, no secrets in code or logs.
+6. **Structured operational logging** for the new workflow, request IDs, no sensitive data (log-redaction test still passes).
+7. **Model usage and cost accounting**: every model call records model, effort, tokens and estimated cost in `runs`; limits respected; unknown model price fails loudly.
+8. **Runbook** updated for any new failure mode; environment variable names added to `.env.example` and `architecture.md`.
+9. **Docs synchronized** (`spec.md`, `architecture.md`, `ROADMAP.md`, README status) in the same PR.
+10. Security implications reviewed in the PR description; CI green; PR approved by the owner before merge.
+
+## 9. Local commands (planned; confirm when implemented)
 
 ```bash
-cp .env.example .env            # fill in APP_PASSWORD, APP_SECRET, ANTHROPIC_API_KEY
+cp .env.example .env                 # fill values; never commit
 python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
-uvicorn app.main:app --reload   # http://localhost:8000
-pytest -q                       # model mocked, no network, seconds
-python -m evals.run             # real model, costs cents, writes evals/history.csv
-python -m app.digest            # print yesterday's digest
+uvicorn app.main:app --reload        # http://localhost:8000
+pytest -q                            # model mocked
+alembic upgrade head                 # once Alembic lands (M0)
+python -m evals.run                  # costs money; owner approval required
+python -m app.digest                 # print today's brief
 ```
 
-On Windows, in PowerShell 7, the first two lines become the three below; the rest is the same.
-
-```powershell
-Copy-Item .env.example .env
-py -3.12 -m venv .venv; .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
+Windows PowerShell 7: `py -3.12 -m venv .venv; .venv\Scripts\Activate.ps1`.

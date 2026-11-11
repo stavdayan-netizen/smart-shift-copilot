@@ -1,81 +1,56 @@
-# Bakery Copilot
+# Smart Shift Copilot
 
-A chat app for one bakery chain, built the Lesson 9 way: a chat UI, a backend with an agent loop and three tools, Postgres, and a morning digest, all on Railway for a few dollars a month. Staff ask about sales and log supplier invoices from a photo.
+A Hebrew-first, mobile-friendly, AI-assisted weekly shift scheduling app for one small Israeli business (course MVP, demo data only).
 
-The plan lives in five files: [spec.md](spec.md) (what), [architecture.md](architecture.md) (how and where), [practice.md](practice.md) (how we work), [runbook.md](runbook.md) (when it breaks), [docs/tickets.md](docs/tickets.md) (the work, as issues). `CLAUDE.md` points Claude Code at the first three.
+## Implementation status
 
-## Run it locally
+**Planning phase (plan approved 2026-11-11). No Smart Shift features are implemented yet.** This repository is a fork of the instructor's [Bakery Copilot](https://github.com/MaceTenth/bakery-copilot); the application code is still the bakery app (sales questions and invoice logging, English, LTR). The planning documents describe the intended product. Nothing in "Planned features" below works today.
 
-macOS and Linux:
+## Relationship to Bakery Copilot
+
+We keep its architecture (FastAPI, Anthropic agent loop with constrained tools, conversation and run persistence, Postgres, Railway with a cron digest, rate limits and cost caps, tests and evals) and replace the domain: shifts, availability, a deterministic scheduling engine, and a manager-only Copilot. Remote `upstream` points to the instructor's repo for reference only.
+
+## Planned features (Phase 1)
+
+- MVP scenario: 8 fictional employees, Morning and Evening shifts, 2 staff per shift, no roles.
+- Employee weekly availability form (`הגשת משמרות לשבוע הבא`), preferred shift range, free-text requests; Tuesday 22:00 Asia/Jerusalem server-enforced deadline.
+- Post-deadline change requests with manager approval and audit trail.
+- Manager dashboard: submissions, gaps, draft vs published schedules.
+- Deterministic scheduling and validation engine; partial results reported honestly.
+- Manager Copilot (Claude) with validated tools; changes need explicit manager confirmation.
+- Daily manager brief. Structured logs. Mobile-first Hebrew RTL UI.
+
+Approved for Phase 2 and explicitly excluded items: see [ROADMAP.md](ROADMAP.md). Cancellation, sickness and no-show are handled by phone, by design.
+
+## Documents
+
+[spec.md](spec.md) what · [architecture.md](architecture.md) how · [practice.md](practice.md) working agreement · [runbook.md](runbook.md) incidents · [ROADMAP.md](ROADMAP.md) phases · [docs/tickets.md](docs/tickets.md) proposed issues · [docs/deployment-plan.md](docs/deployment-plan.md) Railway plan · [CLAUDE.md](CLAUDE.md) instructions for Claude Code.
+
+## Local setup (current bakery baseline — will change in M0)
 
 ```bash
-cp .env.example .env         # set APP_PASSWORD, APP_SECRET, ANTHROPIC_API_KEY
+cp .env.example .env
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Windows, in PowerShell 7 with Python 3.12 (`winget install Python.Python.3.12`):
+Required environment variables (names only; values never committed): `APP_ENV`, `APP_PASSWORD`, `APP_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT`, `DAILY_CAP_USD`, `TIMEZONE`, `CRON_SECRET`, `DIGEST_WEBHOOK_URL`. Planned changes are listed in `architecture.md` §10.
 
-```powershell
-Copy-Item .env.example .env  # set APP_PASSWORD, APP_SECRET, ANTHROPIC_API_KEY
-py -3.12 -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+## Tests
 
-If PowerShell refuses to run `Activate.ps1` ("running scripts is disabled on this system"), run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once, or skip activation and start each command with `.venv\Scripts\python -m`, for example `.venv\Scripts\python -m uvicorn app.main:app --reload`.
+`pytest -q` runs deterministic tests with a fake model (no key, no cost). `python -m evals.run` calls the real model and costs money; run only with owner approval. Baseline of the unmodified instructor code in this fork (2026-11-11, Windows, Python 3.12.10, SQLite, fake model): **38 passed in 2.19 s**. PostgreSQL was not exercised (no Postgres CI job yet, see M0-2).
 
-Open http://localhost:8000, type a name and the password. The first start seeds SQLite with the 29,115-line sales dataset and 10 suppliers (a few seconds).
+## Deployment
 
-Try: "What sold best in the last week of August 2026?", "Revenue by branch for August 2026", or attach an invoice photo.
+Planned on Railway (web + PostgreSQL + digest cron); see [docs/deployment-plan.md](docs/deployment-plan.md). Not deployed yet; no Railway resources exist.
 
-## Tests and evals
+## Limitations
 
-```bash
-pytest -q                    # model mocked; seconds; no key needed
-python -m evals.run          # real model; one turn per case; appends evals/history.csv
-python -m evals.run --judge  # also grades wording with a cheaper model
-```
+**Legal compliance is not implemented.** The MVP applies only availability and no-overlap rules; Israeli employment-law requirements (rest, hours, overtime and so on) need further implementation and legal review before any real-world use.
 
-The same three commands work in PowerShell once `.venv` is active.
+Single business, fictional data, no multi-tenant, no payroll or legal-hours engine, no WhatsApp, no employee cancellation flow.
 
-Tests prove the deterministic parts (parsing, dedup, limits, streaming, the tool loop with a scripted model). Evals prove the agent still behaves after a prompt, tool or model change. CI runs tests on every PR, and evals when the `ANTHROPIC_API_KEY` secret is set.
+## Credits and licence
 
-## Deploy on Railway
-
-The short version follows; the full walkthrough for macOS, Linux and Windows, with every variable and secret, the CLI commands, the dashboard path, day-two operations and troubleshooting, is [docs/deploy-railway.md](docs/deploy-railway.md).
-
-1. **Repo.** Push this folder to a private GitHub repo. Create the issues with `scripts/create_issues.sh` if you want the board (a bash script: on Windows, run it from Git Bash).
-2. **Project and services.** With the CLI (`brew install railway` on macOS, `scoop install railway` on Windows): `railway login`, `railway init --name bakery-copilot`, `railway add --database postgres`, then `railway add --service web --repo <owner>/bakery-copilot --branch main` and the same with `--service digest`. Railway's GitHub app needs access to the repo (Railway → Account Settings → Integrations → GitHub), or builds from GitHub fail with "repository not accessible".
-3. **Settings from code.** Once: `npm install --prefix .railway`. Then from the repo root `railway config plan` and `railway config apply`: `.railway/railway.ts` sets both start commands, the `/health` check, restart policies and the digest's cron schedule (`30 4 * * *`, UTC; 07:30 Israel in summer, 06:30 in winter). Railpack builds from `requirements.txt` with the Python version in `.python-version`, no Dockerfile.
-4. **Variables** on the web service: `APP_ENV=production`, `APP_PASSWORD`, `APP_SECRET` (`openssl rand -hex 32`, or the PowerShell generator in the guide), `ANTHROPIC_API_KEY`, `DATABASE_URL` as a reference to `${{Postgres.DATABASE_URL}}`, `MODEL=claude-opus-5-5`, `DAILY_CAP_USD=3.00`, `CRON_SECRET`, optionally `DIGEST_WEBHOOK_URL`, `TIMEZONE=Asia/Jerusalem`. Redeploy.
-5. **Digest variables.** The digest service references the web service's values: `APP_ENV=${{web.APP_ENV}}`, and the same for `APP_PASSWORD`, `APP_SECRET`, `ANTHROPIC_API_KEY`, `CRON_SECRET`, `MODEL` and `TIMEZONE`, plus `DATABASE_URL=${{Postgres.DATABASE_URL}}`. Set `DIGEST_WEBHOOK_URL` here if the digest should post somewhere. The service runs for seconds and exits.
-6. **First check.** Open the URL, sign in, ask a sales question, attach an invoice. `GET /health` must be 200. Then run through spec.md §7.
-
-Deploy on push to `main` is on by default. Rollback is Deployments → previous deploy → Redeploy.
-
-## Cost (as of October 2026)
-
-| Item | Estimate |
-|---|---|
-| Railway web service (0.05–0.1 vCPU, ~200 MB) | $3–4 / month |
-| Railway Postgres (small, 1 GB) | $1–2 / month |
-| Cron service (seconds a day) | cents |
-| **Railway total** | **$4–6 / month**, inside the Hobby plan's $5 most months |
-| Claude, 300 turns a day with history (Opus 5.5) | ~$18 / month; Sonnet 5.5 ~$9 |
-
-The model is the bill. `HISTORY_LIMIT`, `MODEL_EFFORT` and prompt caching are the three levers; `DAILY_CAP_USD` is the brake.
-
-## Layout
-
-```
-app/            backend: main.py (API), agent.py (loop), tools/, db.py, auth.py, limits.py, costs.py, digest.py
-app/prompts/    system.md — the agent's job description
-static/         the chat UI (plain HTML, CSS, JS)
-data/           bakery_sales.csv (read-only dataset), suppliers.csv
-tests/          pytest, model mocked
-evals/          cases.yaml, run.py, history.csv
-docs/           tickets.md, watch.md, deploy-railway.md
-```
+Derived from the instructor's Bakery Copilot, which has **no licence file** in its repository. Forked for a course assignment; do not redistribute beyond the course without the instructor's permission.
