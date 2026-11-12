@@ -14,7 +14,7 @@ Legend: ★ essential for course submission · ◇ deferrable.
 
 **M1 Availability ★**
 5. **M1-1 Schema, seed and deadline service** — the 12 tables, 8 fictional employees, Morning/Evening × 2 staff, deadline function for Tuesday 22:00 Asia/Jerusalem and the submission-window function (opens at the earlier of publication of the preceding week's schedule and Thursday 22:00, closes Tuesday 22:00; DST-week and boundary tests), `clock.now()` with non-production override.
-6. **M1-2 Availability form and API** — exact Hebrew heading and notices, real dates, day shortcuts, min/max, free text, server-enforced window (rejected before it opens, locked after the deadline; the opening rule in `spec.md` section 4), audit/log events. Mobile DoD.
+6. **M1-2 Availability form and API** (no shift-count preferences; at least one shift; 20 saves per hour; opening notice and "create and edit until Tuesday 22:00" statement) — exact Hebrew heading and notices, real dates, day shortcuts, min/max, free text, server-enforced window (rejected before it opens, locked after the deadline; the opening rule in `spec.md` section 4), audit/log events. Mobile DoD.
 
 **M2 Copilot v1 ★ (course core)**
 7. **M2-1 Agent loop adaptation with read-only tools** — manager-only chat, Hebrew prompt, `get_submission_status` and `get_availability`, `runs.tool_trace`, cost accounting (unknown model price is an error), model/effort from env (Sonnet 5.5 / high candidate), fake-model tests, eval cases written but **not run** without approval. Mobile chat check.
@@ -46,3 +46,11 @@ Legend: ★ essential for course submission · ◇ deferrable.
 19. **P2-4 Availability form restrictions from profile settings**
 
 The instructor's bakery issue script was removed in M0-1; the GitHub issues are the source of truth.
+
+
+## Added 2026-11-12: approved requirements and their placement (`spec.md` section 5a)
+| Issue | Content | Depends on | Blocks / affects |
+|---|---|---|---|
+| **M5-2** Leave requests (#28) | Dates or ranges with optional reason; manager approves, rejects, proposes partial approval or alternative dates; employee acceptance; statuses incl. `ממתין לתשובת העובד`; full decision history; approved leave disabled in the form and excluded from scheduling | M1-2 (#6), M0-3 auth, audit | M3-1 (#9, report shows leave), M3-2 (#10, engine excludes leave), M3-4 (exemptions), M1-2 form (disabled dates seam) |
+| **M3-4** Submission report and draft authorization (#29) | Report (submitted, missing, exempt, reopened); explicit authorization of draft generation with recorded override; draft and publish as separate approvals | M1-2, M3-1 (#9); exemptions from M5-2 | gates M3-2 (#10), M3-3 (#11), M4 (#12) |
+| **M5-3** Reopen for one employee (#30) | Manager reopens one employee's form for a duration or exact closing time; audited; others unaffected | M1-2 (`enforce_window` seam), audit | M3-4 report ("reopened"), M5-1 change requests (an alternative route for late changes) |

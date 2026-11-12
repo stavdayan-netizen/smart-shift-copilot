@@ -29,8 +29,19 @@ Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/esc
 - **Verify:** the person can log in; `GET /api/me` returns the right role; an `audit_log` row `user.code_rotated` exists for a rotation.
 - **Escalate:** a burst of `login_blocked` / `auth_failed` for many names is guessing: leave the limits on, rotate the manager password and `APP_SECRET`, and review `audit_log`. A leaked code: rotate it and review that person's recent activity.
 
-## 5. Employee submission failures [PLANNED]
-- **Symptoms:** "הגשה נכשלה", 4xx/5xx on `PUT /api/availability`. **Signals:** `availability_submitted` absent; validation error type; 409 = deadline passed. **Diagnose:** is the week row present; employee id from session; payload dates inside the week. **Recover:** fix cause; employee resubmits (before deadline). If a legitimate submission was lost at the deadline boundary → manager decides (no silent reopen; use a change request). **Verify:** submission visible on manager dashboard. **Escalate:** repeated 500s → rollback.
+## 5. Employee submission failures [EXISTS: the availability form and API]
+- **Symptoms:** a save fails in the form (a red message), the form shows "not open" when the employee expects it open, or an employee reports a submission that is missing.
+- **Signals:** `window_rejected` (week, `not_open` or `closed`), `availability_submitted` (counts only), `auth_failed`/`forbidden`, `request` events with status 409, 422, 429 or 5xx and the `request_id` the employee can read from the `X-Request-ID` response header; `audit_log` rows `availability.submitted` (week, number of slots, has free text; never the content).
+- **Diagnose:**
+  - *409:* the week's window is not open or has closed. Check `GET /api/cycle` (section 6): opening is the first publication of the preceding schedule or Thursday 22:00 Asia/Jerusalem at the latest; closing is Tuesday 22:00. A frozen test clock (`CLOCK_OVERRIDE`) can explain surprises on non-production instances.
+  - *422:* content rules: at least one shift, days inside the week, at most 1,000 characters of free text. The message names the field.
+  - *429:* more than 20 saves in an hour; the message and `Retry-After` say when to retry. Failed saves do not count. `AVAILABILITY_SAVES_PER_HOUR` changes the limit.
+  - *"No shifts defined":* run `python -m app.seed` (section 6a).
+  - *Saved but not visible to the manager:* look for the audit row of that employee and week; the dashboard (issue #9) reads the same table.
+  - *500 on save:* a failing audit write or a database error rolls the whole save back (nothing half-saved); find it by `request_id` (`unhandled_error`, `db_error`).
+- **Recover:** fix the cause; the employee resubmits while the window is open. After the deadline nothing reopens it automatically; the manager decides (change requests and per-employee reopening are approved but not built yet, `spec.md` section 5a). Never edit submissions by hand in the database.
+- **Verify:** the employee's GET shows the submission; one new audit row exists; the manager sees it.
+- **Rollback/escalate:** repeated 5xx on save after a deploy: roll back the deploy; migration `0004` is backward compatible for one version (it only drops columns the previous code never used).
 
 ## 6. Deadline / timezone errors [EXISTS: rules, clock and status endpoint; the availability form that uses them is #6]
 - **Symptoms:** the window shows open or closed at the wrong time, a DST week is an hour off, the status says `not_open` when the manager expects it open, or every date looks stuck.

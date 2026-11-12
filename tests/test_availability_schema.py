@@ -1,4 +1,4 @@
-"""Availability tables: uniqueness, preference checks, the 1,000-character limit, cascade (migration 0003)."""
+"""Availability tables: uniqueness, the 1,000-character free-text limit, cascade (migrations 0003 and 0004)."""
 import uuid
 from datetime import date, time
 
@@ -39,24 +39,21 @@ def _submission(user, **kw):
 
 def test_a_submission_with_slots_round_trips(db, world):
     user, (morning, evening) = world
-    sub = _submission(user, pref_min=2, pref_max=4, free_text="מעדיפה בקרים")
+    sub = _submission(user, free_text="מעדיפה בקרים")
     sub.slots = [AvailabilitySlot(day=date(2026, 11, 29), shift_id=morning.id), AvailabilitySlot(day=date(2026, 11, 30), shift_id=evening.id)]
     db.add(sub)
     db.commit()
     back = db.get(AvailabilitySubmission, sub.id)
-    assert (back.pref_min, back.pref_max, back.free_text) == (2, 4, "מעדיפה בקרים")
+    assert back.free_text == "מעדיפה בקרים"
     assert {(s.day, s.shift_id) for s in back.slots} == {(date(2026, 11, 29), morning.id), (date(2026, 11, 30), evening.id)}
 
 
-def test_preferences_and_free_text_are_optional(db, world):
+def test_free_text_is_optional(db, world):
     user, _ = world
     db.add(_submission(user))
     db.commit()
     got = db.scalar(select(AvailabilitySubmission).where(AvailabilitySubmission.user_id == user.id))
-    assert (got.pref_min, got.pref_max, got.free_text) == (None, None, None)
-    db.add(_submission(user, week=date(2026, 12, 6), pref_max=3))      # only a maximum
-    db.add(_submission(user, week=date(2026, 12, 13), pref_min=1))     # only a minimum
-    db.commit()
+    assert got.free_text is None
 
 
 def test_one_submission_per_employee_per_week(db, world):
@@ -69,15 +66,6 @@ def test_one_submission_per_employee_per_week(db, world):
     db.rollback()
     db.add(_submission(user, week=date(2026, 12, 6)))                    # another week is fine
     db.commit()
-
-
-@pytest.mark.parametrize("kwargs", [{"pref_min": 4, "pref_max": 2}, {"pref_min": -1}, {"pref_max": -1}])
-def test_invalid_preference_ranges_are_rejected_by_the_database(db, world, kwargs):
-    user, _ = world
-    db.add(_submission(user, **kwargs))
-    with pytest.raises(IntegrityError):
-        db.commit()
-    db.rollback()
 
 
 def test_free_text_limit_is_one_thousand_characters(db, world):
@@ -136,3 +124,12 @@ def test_foreign_keys_hold_on_postgresql(db, world):
 def test_employees_are_users_with_the_employee_role(db, world):
     user, _ = world
     assert isinstance(user, User) and user.access_role == "employee"
+
+
+def test_there_are_no_shift_count_preference_columns():
+    from sqlalchemy import inspect
+
+    from app.db import engine
+
+    cols = {c["name"] for c in inspect(engine).get_columns("availability_submissions")}
+    assert "pref_min" not in cols and "pref_max" not in cols and "free_text" in cols

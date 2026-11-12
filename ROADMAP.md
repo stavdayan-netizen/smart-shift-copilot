@@ -1,6 +1,6 @@
 # ROADMAP.md
 
-Status as of 2026-11-11: **plan approved; M0-1 (fork cleanup) is done and merged; M0-2 (logging, Alembic, PostgreSQL CI, audit log) is merged; M0-3 (per-employee auth) is merged; M0-4 (Hebrew RTL shell) is merged; M1-1 (schema, seed, weekly cycle and clock) is in review; no Smart Shift feature is implemented.** The code is the instructor's infrastructure with the bakery domain removed. Per-issue detail: `docs/tickets.md`. Scope: `spec.md`.
+Status as of 2026-11-11: **plan approved; M0-1 (fork cleanup) is done and merged; M0-2 (logging, Alembic, PostgreSQL CI, audit log) is merged; M0-3 (per-employee auth) is merged; M0-4 (Hebrew RTL shell) is merged; M1-1 (schema, seed, weekly cycle and clock) is merged; M1-2 (the availability form and API) is in review; no Smart Shift feature is implemented.** The code is the instructor's infrastructure with the bakery domain removed. Per-issue detail: `docs/tickets.md`. Scope: `spec.md`.
 
 ## Phase 1 — MVP (approved)
 
@@ -15,7 +15,9 @@ Owner priority: **a real agent with real tool use comes early**, not a form app 
 | M2 Copilot v1 | Adapted agent loop, Hebrew prompt, **read-only tools** over availability data, manager chat UI, tool trace, cost accounting, fake-model tests | M1 | **Yes (course core)** |
 | **D1 Deploy** | First Railway deploy: web + Postgres, `/health` (needs owner approval to create resources) | M2 | Yes (needs a URL) |
 | M3 Scheduling | Manager dashboard, scheduling engine + validator, draft/publish, schedule views | M1 | Yes |
+| M3-4 Draft authorization (added 2026-11-12) | Submission-status report, explicit authorization of draft generation (with a recorded override for missing submissions), draft and publication as separate approvals | M1-2, M3-1, M5-2 for exemptions; gates M3-2, M3-3 and M4 | Yes (it gates the draft) |
 | M4 Copilot v2 | Scheduling tools, explanations, replacements, propose → validate → manager confirms | M2, M3 | Yes |
+| M5+ Leave, reopening (added 2026-11-12) | Leave requests with employee acceptance and approved-leave handling (M5-2); reopen availability for one employee and week (M5-3). M3-4 below belongs to M3. | M1-2 (M5-2 also M3-1, M3-2) | Required by the approved scope; build a minimal version first |
 | M5 Change requests | Post-deadline requests, manager decision, audit | M1, M3 | Required by spec; first to cut to a minimal flow |
 | M6 Daily brief | Deterministic digest + cron | M1, M3 (M5 for pending counts) | Deferrable, small |
 | M7 Hardening | Evals baseline (approved spend only), runbook verification, final 4-width responsive pass | all | Partial |

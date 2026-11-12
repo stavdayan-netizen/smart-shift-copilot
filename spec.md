@@ -21,7 +21,7 @@ It is a course MVP adapting the instructor's Bakery Copilot architecture (FastAP
 
 ## 3. Phase 1 scope [APPROVED]
 
-1. Employee weekly availability form, preferred weekly shift range, optional free-text requests.
+1. Employee weekly availability form (days and shifts) and optional free-text requests and preferences. There are no numeric shift-count preferences.
 2. Server-enforced Tuesday 22:00 (Asia/Jerusalem) deadline; read-only form afterwards.
 3. Post-deadline change requests with manager approve/reject and an audit trail.
 4. Manager dashboard: submission status, who has not submitted, preferences, pending requests, staffing requirements, coverage gaps, draft vs published schedules, Copilot.
@@ -60,9 +60,11 @@ Out of Phase 1: everything in §10 (Phase 2) and §11 (exclusions).
 1. Sees the target week with real dates, the window state (not open yet, with when it opens / open, with the deadline countdown / closed) and the submission state (not submitted / submitted / locked) prominently.
 2. For each day, selects the shifts they can work. Shift definitions are configurable data; the MVP demo uses **two shifts per day: בוקר (Morning) and ערב (Evening)**, with a default staffing requirement of **2 employees per shift**. No night shift in the MVP. [APPROVED 2026-11-11] Shift names, times and `required_staff` are **database data** in the `shifts` table, never hard-coded scheduling rules. The demo values are **Morning 08:00-16:00** and **Evening 16:00-00:00**, where an end time at or before the start time means the shift ends on the **following calendar day** (so Evening ends at midnight, eight hours later). The seed command creates missing shifts and **never modifies an existing shift's settings**; there is no admin UI for them in Phase 1. [APPROVED 2026-11-12]
 3. Per-day shortcuts (UI only, not availability states): **`כל המשמרות`** selects every shift that day; **`לא זמין/ה`** clears the day. Editing any single checkbox afterwards just changes the selection; the shortcut buttons never hold state of their own.
-4. Separate section: **preferred minimum / maximum shifts per week.** Preferences, not guarantees. Notice (exact): `נשתדל להתחשב בהעדפותיך בעת הכנת הסידור, אך אין התחייבות למספר המשמרות המבוקש.` Validation: integers ≥ 0, min ≤ max, max ≤ number of available slots in the week (soft warning, not block) [PROPOSED].
-5. Separate optional free-text field for personal requests. Notice (exact): `נשתדל להתחשב בבקשות ככל האפשר, בהתאם לצורכי העסק ולאילוצי השיבוץ, אך אין התחייבות שניתן יהיה להיענות לכולן.` Length cap [PROPOSED: 1,000 chars].
-6. Submit → server validates → confirmation shown. Resubmit allowed until the deadline.
+4. **There are no minimum / maximum shift-count preference fields** (removed by the owner on 2026-11-12). The only preference input is the optional free-text field below. [APPROVED 2026-11-12]
+5. Separate optional free-text field for personal requests and preferences, **at most 1,000 characters** (counted after trimming; enforced by the form, the API and the database). Notice (exact): `נשתדל להתחשב בבקשות ככל האפשר, בהתאם לצורכי העסק ולאילוצי השיבוץ, אך אין התחייבות שניתן יהיה להיענות לכולן.` [APPROVED 2026-11-12]
+6. Submit → server validates → confirmation shown. **A submission needs at least one available shift; a submission with zero shifts is refused** (an employee who cannot work at all that week does not submit and contacts the manager). The employee can create **and edit** the submission until Tuesday 22:00, and the form says so in plain Hebrew (`אפשר להגיש ולערוך את ההגשה עד יום שלישי בשעה 22:00.`). Saves are limited to **20 per employee per hour**; failed saves do not count. [APPROVED 2026-11-12]
+   - Window notice shown before the window opens (exact): `הגשת המשמרות לשבוע הבא תיפתח לאחר פרסום סידור העבודה לשבוע הקרוב, או ביום חמישי בשעה 22:00 – המוקדם מביניהם`.
+   - After the deadline the employee sees the submission read-only (a summary, not a greyed-out form) together with the next window's state; change requests arrive with their own issue and no button is shown before then.
 7. After the deadline: read-only view + a clearly reachable button to open a **change request**.
 8. After the manager publishes: employee sees **only their own** assigned shifts.
 
@@ -72,12 +74,31 @@ Out of Phase 1: everything in §10 (Phase 2) and §11 (exclusions).
 - Full audit trail of request, decision, who, when.
 - **A change request is about future availability. It is not cancellation of an assigned shift** and does not release the employee from a published shift. Approved availability changes that conflict with an already-published assignment are surfaced to the manager as a conflict; they never silently modify the schedule.
 
+## 5a. Additional approved requirements (2026-11-12; later issues, NOT part of #6)
+
+These are approved and recorded here so the design keeps room for them; nothing below is built by the availability form.
+
+**Leave requests** (issue "M5-2")
+- An employee can request leave for specific dates or a date range, with an optional reason.
+- The manager can **approve**, **reject**, **propose a partial approval** (some of the dates) or **suggest alternative dates**. A proposal made by the manager becomes approved only after the **employee accepts** it; until then the request shows to the employee as **`ממתין לתשובת העובד`**. Employees can see the status of all their requests.
+- Every decision and every response is recorded (request, decision, proposal, acceptance or refusal, who, when).
+- **Approved leave dates** are disabled in the employee's availability form (no shifts can be selected on those days) and are excluded from scheduling. The manager's submission report shows approved leave dates, also for partial weeks. **Full-week approved leave exempts the employee from submitting availability** (they are not listed as missing).
+
+**Submission-status report and draft authorization** (issue "M3-4")
+- After the deadline the manager first reviews a **submission-status report** (submitted, missing, exempt by approved leave, individually reopened) and then **explicitly authorizes draft generation**. Missing submissions can be overridden only with the manager's explicit approval, which is recorded.
+- **Draft generation and publication are separate manager approvals**, each an explicit, audited action. Neither happens automatically, and nothing in the model's hands can do either.
+
+**Reopening for one employee** (issue "M5-3")
+- The manager can **reopen availability for a specific employee and week**, for a configurable duration or until an exact closing time, **without reopening anyone else's form**. Reopening is an explicit, audited manager action; it is not an automatic extension of the Tuesday deadline, and it ends at the closing time that was set.
+
+**Placement and order** are in `ROADMAP.md` and `docs/tickets.md`.
+
 ## 6. Manager workflow
 
 Dashboard (mobile-usable): submission status for the target week; employees who have not submitted; each submission with preferences/requests; pending change requests; staffing requirements vs availability and coverage gaps; draft and published schedules (clearly labelled); Copilot access.
 
 1. Before the deadline: monitor submissions. No draft generation. If a new submission window has opened while the preceding week's schedule is still unpublished, the dashboard shows a warning (issue #9).
-2. After the deadline: request **draft generation** (button or Copilot). Result may be partial; uncovered shifts are listed explicitly.
+2. After the deadline: review the **submission-status report**, then **explicitly authorize draft generation** (button or Copilot; missing submissions need an explicit override). Result may be partial; uncovered shifts are listed explicitly. Draft generation and publication are separate approvals (section 5a).
 3. Review, adjust (preferably via Copilot proposals, §8), then **explicitly approve and publish**. Publishing is never automatic. [APPROVED]
 4. Post-publish changes are made only through validated, explicitly confirmed changes; unrelated assignments are never reshuffled.
 5. Decide change requests (approve/reject) with the validation result visible.
@@ -94,7 +115,7 @@ Draft vs published are separate states with separate UI labels (`טיוטה` / `
 - H5. If full coverage is impossible, the uncovered slots are **reported explicitly** (partial proposal or declared infeasible). A valid-looking but invalid result is never produced.
 
 ### Soft preferences (best effort, never promised)
-Preferred min/max weekly shifts; individual preferences; fair distribution; balance between employees. Free-text requests are **not** auto-converted to hard constraints; ambiguous or potentially critical ones are **flagged for the manager** instead of silently interpreted.
+Individual preferences (from the free-text field, flagged for the manager, never silently turned into rules); fair distribution; balance between employees. Free-text requests are **not** auto-converted to hard constraints; ambiguous or potentially critical ones are **flagged for the manager** instead of silently interpreted.
 
 **No additional hard rules are introduced.** Not added: maximum consecutive days, minimum rest between shifts, legal-hours limits, overtime. 
 > **Legal compliance notice.** The MVP does not implement Israeli employment-law requirements (weekly rest, daily/weekly hours limits, overtime, night-work rules, minors, etc.). Further implementation and legal review are required before any real-world production use. This must stay visible in `README.md` and the manager UI footer/about text. [APPROVED 2026-11-11]
@@ -150,7 +171,7 @@ Cancellation of published shifts, sickness reporting and no-show reporting are *
 Employee
 1. Login as an employee; see `הגשת משמרות לשבוע הבא` with real Sunday–Saturday dates and the deadline.
 2. Select shifts; `כל המשמרות` selects all of a day, `לא זמין/ה` clears it; toggling a single box afterwards behaves correctly.
-3. Min/max preference and free text have their exact notices; min > max is rejected with a Hebrew message.
+3. The free-text field has its exact notice and a 1,000-character limit (1,001 is rejected with a Hebrew message); there are no min/max shift-count fields; a submission with zero shifts is rejected; saves are limited to 20 per hour.
 4. Resubmit before the deadline: latest values saved. Before the window opens a write is rejected (409); the window opens at the earlier of publication of the preceding week's schedule and Thursday 22:00 Asia/Jerusalem, and closes Tuesday 22:00 (tested with a clock override, including Israel DST weeks and the boundary second).
 5. After the deadline (test with a clock override in non-production): form is read-only; a direct API write is rejected 403/409 server-side (not just UI).
 6. DST: deadline computed correctly for target weeks around Israel's DST changes (unit-tested).
@@ -173,6 +194,8 @@ Cross-cutting
 19. `python -m evals.run` meets the agreed baseline (value to be agreed after first run).
 
 ## 14. Decisions and remaining questions
+
+**Approved by the owner on 2026-11-12 (issue #6):** the shift-count preference fields are removed (only optional free text of at most 1,000 characters remains, with its notice); zero-shift submissions are refused; at most 20 saves per employee per hour; the opening notice and the "create and edit until Tuesday 22:00" statement are shown as written in section 5.
 
 **Approved by the owner on 2026-11-12 (issue #5):** demo shifts Morning 08:00-16:00 and Evening 16:00-00:00 (ending the following calendar day), configurable database data; an idempotent seed that never overwrites existing shift settings; optional preference minimum/maximum and a 1,000-character free-text limit (also enforced by the database); fictional employees are `users` with the employee role; the cycle rules always use Asia/Jerusalem; `CLOCK_OVERRIDE` freezes the scheduling clock outside production and is refused in production.
 

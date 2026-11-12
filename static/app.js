@@ -7,6 +7,7 @@
   "use strict";
   const T = window.T;
   const MD = window.SafeMarkdown;
+  const AM = window.AvailabilityModel;
   const $ = (id) => document.getElementById(id);
   const SVG_NS = "http://www.w3.org/2000/svg";
   const HEBREW = /[֐-׿]/;
@@ -83,9 +84,10 @@
     const { quiet, ...fetchOptions } = options;
     const res = await request(path, fetchOptions);
     if (!res.ok) {
-      let detail = null;
-      try { detail = (await res.json()).detail; } catch (_) { /* not JSON */ }
+      let detail = null, errors = null;
+      try { const body = await res.json(); detail = body.detail; errors = body.errors; } catch (_) { /* not JSON */ }
       const err = new ApiError(res.status, messageFor(res.status, detail, res.headers.get("Retry-After"), path));
+      err.errors = Array.isArray(errors) ? errors : [];
       if (res.status === 401 && path !== "/api/login" && !quiet) showLogin(T.login.expired);
       throw err;
     }
@@ -118,7 +120,7 @@
 
   const DESTINATIONS = {
     manager: [{ id: "assistant", label: "nav.assistant", icon: "sparkle" }, { id: "account", label: "nav.account", icon: "user" }],
-    employee: [{ id: "home", label: "nav.home", icon: "home" }, { id: "account", label: "nav.account", icon: "user" }],
+    employee: [{ id: "availability", label: "nav.availability", icon: "calendar" }, { id: "account", label: "nav.account", icon: "user" }],
   };
   const destinations = () => DESTINATIONS[state.user.role] || DESTINATIONS.employee;
 
@@ -145,20 +147,223 @@
     $("nav").querySelectorAll("a").forEach((a) => {
       if (a.dataset.route === id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
+    stopAvailabilityTimer();
     const main = $("main");
     main.replaceChildren();
-    ({ assistant: renderAssistant, home: renderHome, account: renderAccount })[id](main);
+    ({ assistant: renderAssistant, availability: renderAvailability, account: renderAccount })[id](main);
     const h1 = main.querySelector("h1");
     if (h1) { h1.setAttribute("tabindex", "-1"); h1.focus({ preventScroll: true }); }
     document.title = get("nav." + (id === "assistant" ? "assistant" : id)) + " · " + T.app.name;
     main.scrollTop = 0;
   }
 
-  // ---- employee home (placeholder until the availability form exists)
-  function renderHome(main) {
-    main.append(el("div", { class: "screen" },
-      el("h1", { text: fmt(T.home.title, { name: state.user.name }) }),
-      el("section", { class: "card" }, el("h2", { text: T.home.lead }), el("p", { class: "muted", text: T.home.body }))));
+  // ---- employee: the availability form (spec.md section 5)
+  const avail = { data: null, sel: {}, text: "", saved: { sel: {}, text: "" }, skew: 0, timer: null, inputs: {}, busy: false, notice: "", lost: false };
+  const fmtDay = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
+  const fmtDate = (iso, year) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
+  const fmtWhen = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
+  const fmtStamp = (iso) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
+  const weekRange = (start, end) => fmt(T.availability.week, { start: fmtDate(start), end: fmtDate(end, true) });
+
+  function durationText(seconds) {
+    const d = AM.splitDuration(seconds), A = T.availability, parts = [];
+    if (d.days) parts.push(d.days + " " + (d.days === 1 ? A.day : A.days));
+    if (d.hours) parts.push(d.hours + " " + (d.hours === 1 ? A.hour : A.hours));
+    if (!d.days && d.minutes) parts.push(d.minutes + " " + (d.minutes === 1 ? A.minute : A.minutes));
+    if (!parts.length) return A.lessThanMinute;
+    return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " " + A.and + parts[parts.length - 1];
+  }
+  function stopAvailabilityTimer() {
+    if (avail.timer) { clearInterval(avail.timer); avail.timer = null; }
+    window.onbeforeunload = null;
+  }
+  const isDirty = () => AM.isDirty(avail.sel, avail.text, avail.saved);
+
+  async function renderAvailability(main) {
+    avail.inputs = {}; avail.notice = ""; avail.busy = false;
+    const body = el("div", { class: "stack", id: "avail-body" }, el("p", { class: "muted", text: T.status.loading }));
+    main.append(el("div", { class: "screen" }, el("h1", { text: T.availability.heading }), body));
+    await loadAvailability(true);
+  }
+
+  async function loadAvailability(first) {
+    const body = $("avail-body"); if (!body) return;
+    try {
+      const data = await api("/api/availability");
+      avail.data = data;
+      avail.skew = Date.parse(data.cycle.now) - Date.now();
+      const mine = data.submission;
+      avail.saved = { sel: AM.fromSlots(mine ? mine.slots : []), text: mine && mine.free_text ? mine.free_text : "" };
+      if (first || !isDirty() || !data.editable) { avail.sel = AM.fromSlots(mine ? mine.slots : []); avail.text = avail.saved.text; }
+      drawAvailability();
+    } catch (e) {
+      if (!$("avail-body")) return;
+      const retry = el("button", { class: "btn", type: "button", text: T.availability.refresh });
+      retry.addEventListener("click", () => loadAvailability(true));
+      $("avail-body").replaceChildren(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: e.message || T.availability.loadFailed })), retry);
+    }
+  }
+
+  function chip(text, kind) { return el("span", { class: "chip chip-" + kind, text }); }
+
+  function statusCard(data) {
+    const c = data.cycle, A = T.availability;
+    const stateChip = c.state === "open" ? chip(A.stateOpen, "open") : c.state === "closed" ? chip(A.stateClosed, "closed") : chip(A.stateNotOpen, "wait");
+    const mine = data.submission;
+    const subChip = mine ? chip(fmt(A.submissionDone, { when: fmtStamp(mine.updated_at) }), "ok") : chip(A.submissionNone, "wait");
+    const card = el("section", { class: "card status-card", "aria-label": A.stateTitle },
+      el("p", { class: "week-range", text: weekRange(data.week.start, data.week.end) }),
+      el("div", { class: "chips" }, stateChip, subChip));
+    if (c.state === "open") {
+      card.append(el("p", { text: fmt(A.closesAt, { when: fmtWhen(c.closes_at) }) }), el("p", { class: "countdown", id: "countdown" }));
+      card.append(el("p", { class: "muted", text: A.editUntil }));
+    } else {
+      card.append(el("p", { text: A.openingNotice }), el("p", { class: "muted", text: fmt(A.latestOpen, { when: fmtWhen(c.latest_opens_at) }) }),
+        el("p", { class: "muted", text: A.editUntil }));
+    }
+    if (avail.lost) { card.append(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: A.closedWhileEditing }))); }
+    return card;
+  }
+
+  function lockedCard(locked) {
+    const A = T.availability, shifts = avail.data.shifts, sub = locked.submission;
+    const byDay = {};
+    sub.slots.forEach((s) => { (byDay[s.day] = byDay[s.day] || []).push(s.shift_id); });
+    const list = el("ul", { class: "locked-days" }, Object.keys(byDay).sort().map((day) => {
+      const names = byDay[day].map((id) => (shifts.find((x) => x.id === id) || { name: "" }).name);
+      return el("li", {}, el("strong", { text: fmtDay(day) + ", " + fmtDate(day) }), " · ", names.join(", "));
+    }));
+    const card = el("section", { class: "card locked-card" }, el("h2", { text: A.lockedTitle }), el("p", { class: "muted", text: fmt(A.lockedWeek, { start: fmtDate(locked.week_start), end: fmtDate(locked.week_end, true) }) }), list);
+    if (sub.free_text) card.append(el("h3", { text: A.lockedRequests }), el("p", { class: "free-text", dir: "auto", text: sub.free_text }));
+    card.append(el("div", { class: "notice notice-info" }, icon("info"), el("span", { text: A.lockedNote })));
+    return card;
+  }
+
+  function drawAvailability() {
+    const body = $("avail-body"); if (!body) return;
+    const d = avail.data, A = T.availability;
+    stopAvailabilityTimer();
+    avail.inputs = {};
+    body.replaceChildren(statusCard(d));
+    if (!d.shifts.length) body.append(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: A.noShifts })));
+    else if (d.editable) body.append(...buildForm(d));
+    if (d.locked_week) body.append(lockedCard(d.locked_week));
+    startCountdown();
+    syncForm();
+  }
+
+  function startCountdown() {
+    const c = avail.data.cycle;
+    const node = $("countdown"); if (!node) return;
+    const closes = Date.parse(c.closes_at);
+    const tick = () => {
+      const left = (closes - (Date.now() + avail.skew)) / 1000;
+      if (left <= 0) { stopAvailabilityTimer(); avail.lost = isDirty(); loadAvailability(false); return; }
+      node.textContent = fmt(T.availability.countdown, { duration: durationText(left) });
+    };
+    tick();
+    avail.timer = setInterval(tick, 20000);
+  }
+
+  function buildForm(d) {
+    const A = T.availability;
+    const days = el("div", { class: "day-grid" });
+    d.week.days.forEach((day) => {
+      const name = fmtDay(day);
+      const all = el("button", { class: "btn", type: "button", "aria-label": fmt(A.allAria, { day: name }) }, el("span", { text: A.all }));
+      const none = el("button", { class: "btn", type: "button", "aria-label": fmt(A.noneAria, { day: name }) }, el("span", { text: A.none }));
+      all.addEventListener("click", () => { avail.sel = AM.selectAll(avail.sel, day, d.shifts); syncForm(); });
+      none.addEventListener("click", () => { avail.sel = AM.clearDay(avail.sel, day); syncForm(); });
+      const count = el("span", { class: "muted day-count", id: "count-" + day });
+      const checks = d.shifts.map((sh) => {
+        const input = el("input", { type: "checkbox", id: "chk-" + day + "-" + sh.id });
+        input.addEventListener("change", () => { avail.sel = AM.toggle(avail.sel, day, sh.id, input.checked); syncForm(); });
+        avail.inputs[AM.key(day, sh.id)] = input;
+        return el("label", { class: "check", for: input.id }, input, el("span", { class: "check-text" }, el("span", { class: "check-name", text: sh.name }), el("span", { class: "check-time ltr", text: sh.start_time + "–" + sh.end_time })));
+      });
+      days.append(el("fieldset", { class: "day-card", id: "day-" + day },
+        el("legend", { class: "sr-only", text: fmt(A.shiftsOf, { day: name }) }),
+        el("div", { class: "day-head" }, el("h3", { text: name + ", " + fmtDate(day) }), count),
+        el("div", { class: "checks" }, checks),
+        el("div", { class: "shortcuts" }, all, none)));
+    });
+    const slotsError = el("div", { class: "notice notice-error", id: "slots-error", role: "alert", hidden: true });
+    const daysCard = el("section", { class: "stack" }, el("h2", { text: A.daysTitle }), el("p", { class: "muted", text: A.daysHelp }), slotsError, days);
+
+    const ta = el("textarea", { class: "input", id: "free-text", rows: "4", dir: "auto", "aria-describedby": "free-help free-notice free-count", maxlength: "5000" });
+    ta.value = avail.text;
+    ta.addEventListener("input", () => { avail.text = ta.value; syncForm(); });
+    const textError = el("div", { class: "notice notice-error", id: "text-error", role: "alert", hidden: true });
+    const freeCard = el("section", { class: "card stack" },
+      el("h2", {}, A.freeTitle + " ", el("span", { class: "muted optional", text: A.freeOptional })),
+      el("div", { class: "field" }, el("label", { for: "free-text", text: A.freeLabel }), el("span", { class: "hint", id: "free-help", text: A.freeHelp }), ta,
+        el("span", { class: "hint counter", id: "free-count" })),
+      el("div", { class: "notice notice-info", id: "free-notice" }, icon("info"), el("span", { text: A.freeNotice })), textError);
+    avail.inputs.text = ta;
+
+    const msg = el("p", { class: "save-note", id: "save-note", role: "status" });
+    const help = el("p", { class: "muted", id: "save-help" });
+    const submit = el("button", { class: "btn btn-primary", type: "submit", id: "btn-save" });
+    const bar = el("div", { class: "submit-bar" }, el("div", { class: "submit-text" }, msg, help), submit);
+    const form = el("form", { class: "stack", id: "avail-form", novalidate: true }, daysCard, freeCard, bar,
+      el("p", { class: "muted", id: "cannot-work", text: A.cannotWork }));
+    form.addEventListener("submit", saveAvailability);
+    return [form];
+  }
+
+  function syncForm() {
+    if (!$("avail-form")) return;
+    const d = avail.data, A = T.availability;
+    d.week.days.forEach((day) => {
+      d.shifts.forEach((sh) => { const i = avail.inputs[AM.key(day, sh.id)]; if (i) i.checked = AM.has(avail.sel, day, sh.id); });
+      const n = AM.countDay(avail.sel, day), node = $("count-" + day);
+      if (node) node.textContent = n ? fmt(A.selectedCount, { n }) : A.noneSelected;
+      const card = $("day-" + day); if (card) card.classList.toggle("has-selection", n > 0);
+    });
+    const len = AM.textLength(avail.text), counter = $("free-count");
+    if (counter) { counter.textContent = fmt(A.counter, { n: len.toLocaleString("he-IL"), max: AM.TEXT_MAX.toLocaleString("he-IL") }); counter.classList.toggle("over", len > AM.TEXT_MAX); }
+    const dirty = isDirty(), probs = AM.problems(avail.sel, avail.text), submit = $("btn-save");
+    if (dirty) avail.notice = "";   // the "saved" message is about the previous version
+    submit.replaceChildren(avail.busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : "", el("span", { text: avail.busy ? A.saving : (d.submission ? A.update : A.save) }));
+    submit.disabled = avail.busy || probs.length > 0 || (!!d.submission && !dirty);
+    const help = $("save-help");
+    help.textContent = AM.count(avail.sel) === 0 ? A.needOne : (dirty ? A.unsaved : "");
+    help.classList.toggle("dirty", dirty && AM.count(avail.sel) > 0);
+    const left = d.limits.saves_left;
+    if (left <= 5 && !avail.notice) help.textContent = (help.textContent ? help.textContent + " " : "") + fmt(A.savesLeft, { n: left });
+    $("save-note").textContent = avail.notice;
+    window.onbeforeunload = dirty ? (e) => { e.preventDefault(); e.returnValue = ""; } : null;
+  }
+
+  function showFieldError(id, message) {
+    const box = $(id); if (!box) return;
+    box.replaceChildren(); box.hidden = !message;
+    if (message) box.append(icon("alert"), el("span", { text: message }));
+  }
+
+  async function saveAvailability(e) {
+    e.preventDefault();
+    if (avail.busy) return;
+    showFieldError("slots-error", ""); showFieldError("text-error", ""); avail.notice = "";
+    const probs = AM.problems(avail.sel, avail.text);
+    if (probs.includes("no_slots")) { showFieldError("slots-error", T.availability.needOne); return; }
+    avail.busy = true; syncForm();
+    try {
+      const data = await api("/api/availability", { method: "PUT", body: JSON.stringify({ week_start: avail.data.week.start, slots: AM.toSlots(avail.sel), free_text: avail.text.trim() ? avail.text : null }) });
+      avail.data = data; avail.lost = false;
+      avail.saved = { sel: AM.fromSlots(data.submission.slots), text: data.submission.free_text || "" };
+      avail.sel = AM.fromSlots(data.submission.slots); avail.text = avail.saved.text;
+      avail.notice = fmt(T.availability.saved, { when: fmtWhen(data.cycle.closes_at) });
+      avail.busy = false;
+      drawAvailability(); announce(avail.notice);
+    } catch (err) {
+      avail.busy = false;
+      const fields = (err.errors || []);
+      const slotMsg = fields.find((f) => f.field === "slots"), textMsg = fields.find((f) => f.field === "free_text");
+      if (slotMsg || textMsg) { syncForm(); showFieldError("slots-error", slotMsg ? slotMsg.message : ""); showFieldError("text-error", textMsg ? textMsg.message : ""); }
+      else if (err.status === 409) { await loadAvailability(false); avail.notice = ""; const b = $("avail-body"); if (b) b.prepend(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: err.message }))); }
+      else { avail.notice = ""; syncForm(); showFieldError("slots-error", err.message); }
+    }
   }
 
   // ---- account (both roles)
@@ -387,7 +592,7 @@
         code.value = ""; code.type = "password";
         history.replaceState(null, "", location.pathname);
         showApp();
-        announce(fmt(T.home.title, { name: state.user.name }));
+        announce(T.login.signedIn);
       } catch (err) {
         setNotice($("login-notice"), err.message); setBusy(false); code.focus();
       }

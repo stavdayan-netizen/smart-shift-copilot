@@ -65,6 +65,7 @@ class Settings:
     client_ip_header: str | None
     allowed_origins: str | None
     clock_override: str | None
+    availability_saves_per_hour: int
     app_secret: str
     database_url: str
     anthropic_api_key: str | None
@@ -136,6 +137,7 @@ def load_settings() -> Settings:
         manager_password=manager_password,
         allowed_origins=_env("ALLOWED_ORIGINS"),
         clock_override=clock_override,
+        availability_saves_per_hour=max(1, int(_env("AVAILABILITY_SAVES_PER_HOUR", "20"))),
         client_ip_header=(_env("CLIENT_IP_HEADER") or "").strip().lower() or None,
         app_secret=app_secret or secrets.token_hex(32),
         database_url=database_url,

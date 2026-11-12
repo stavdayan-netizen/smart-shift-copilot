@@ -71,7 +71,7 @@ def _sample(path):
 
 
 def _call(c, method, path):
-    body = {"message": "hello"} if path == "/api/chat" else None
+    body = {"message": "hello"} if path == "/api/chat" else ({"week_start": "2026-11-29", "slots": []} if path == "/api/availability" else None)
     return c.request(method, _sample(path), json=body, headers=H)
 
 
@@ -91,11 +91,16 @@ def test_route_matrix_anonymous_employee_and_manager(client, db, logged_in):
         level = _levels(route.dependant)
         assert _call(anonymous, method, path).status_code == 401, f"{method} {path} must reject anonymous"
         emp = _call(employee, method, path).status_code
+        mgr = _call(client, method, path).status_code
         if "manager" in level:
             assert emp == 403, f"{method} {path} must be manager-only"
+            assert mgr not in (401, 403), f"{method} {path} must allow the manager"
+        elif "employee" in level:
+            assert mgr == 403, f"{method} {path} must be employee-only"
+            assert emp not in (401, 403), f"{method} {path} must allow an employee"
         else:
             assert emp not in (401, 403), f"{method} {path} should allow any signed-in user"
-        assert _call(client, method, path).status_code not in (401, 403), f"{method} {path} must allow the manager"
+            assert mgr not in (401, 403), f"{method} {path} must allow the manager"
 
 
 def test_employee_cannot_use_the_copilot_and_nothing_is_written(client, db, logged_in):

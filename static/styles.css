@@ -244,6 +244,48 @@ main:focus { outline: none; }
 .history .state { padding: 16px; color: var(--muted); display: grid; gap: 12px; justify-items: start; }
 .history-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- availability form ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; min-block-size: 32px; padding-inline: 12px; border-radius: 999px; font-size: .875rem; font-weight: 600; border: 1px solid transparent; }
+.chip-open { background: var(--accent-soft); color: var(--accent-text); }
+.chip-ok { background: var(--accent-soft); color: var(--accent-text); }
+.chip-wait { background: var(--surface-2); color: var(--muted); border-color: var(--line); }
+.chip-closed { background: var(--danger-soft); color: var(--danger); }
+.status-card { display: grid; gap: 10px; }
+.status-card .week-range { font-weight: 700; font-size: 1.0625rem; }
+.countdown { font-weight: 700; color: var(--accent-text); }
+.day-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.day-card { margin: 0; min-inline-size: 0; padding: 14px 16px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 12px; }
+.day-card.has-selection { border-color: var(--accent); }
+.day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.day-head h3 { font-size: 1.0625rem; }
+.day-count { font-size: .875rem; }
+.checks { display: grid; gap: 8px; }
+.check { display: flex; align-items: center; gap: 12px; min-block-size: 52px; padding: 8px 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); cursor: pointer; }
+.check:hover { border-color: var(--muted); }
+.check:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
+.check input { inline-size: 24px; block-size: 24px; flex: none; accent-color: var(--accent); margin: 0; cursor: pointer; }
+.check-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-inline-size: 0; }
+.check-name { font-weight: 700; }
+.check-time { color: var(--muted); font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
+.shortcuts .btn { flex: 1 1 8rem; }
+.optional { font-weight: 400; font-size: .9375rem; }
+textarea.input { min-block-size: 120px; resize: vertical; line-height: 1.6; }
+.counter.over { color: var(--danger); font-weight: 700; }
+.submit-bar { position: sticky; inset-block-end: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.submit-text { flex: 1 1 12rem; min-inline-size: 0; display: grid; gap: 2px; font-size: .9375rem; }
+.submit-text p { margin: 0; }
+.save-note { color: var(--accent-text); font-weight: 600; }
+.save-note:empty { display: none; }
+#save-help { color: var(--muted); }
+#save-help.dirty { color: var(--ink); font-weight: 600; }
+#save-help:empty { display: none; }
+.submit-bar .btn { flex: 1 1 10rem; }
+.locked-days { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 6px; }
+.locked-card h3 { font-size: 1rem; margin-block: 12px 4px; }
+.free-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 12px; }
+
 /* ---------- account ---------- */
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0 0 16px; }
 .kv dt { color: var(--muted); }
@@ -258,6 +300,7 @@ dialog .dialog-actions { display: flex; justify-content: flex-end; padding: 0 20
 
 /* ---------- wider screens ---------- */
 @media (min-width: 768px) {
+  .day-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shell { grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "nav bar" "nav main"; }
   .nav { flex-direction: column; justify-content: flex-start; padding-block: 12px; border-block-start: 0; border-inline-end: 1px solid var(--line); }
   .nav a { flex: none; border-block-start: 0; border-inline-start: 3px solid transparent; min-block-size: 64px; }
