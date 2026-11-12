@@ -23,7 +23,7 @@ Legend: ★ essential for course submission · ◇ deferrable.
 8. **D1 First Railway deploy** — needs owner approval before creating resources. Done when: public URL, `/health` 200, form usable on a real phone, rollback tried once.
 
 **M3 Scheduling ★**
-9. **M3-1 Manager dashboard** — submission status, non-submitters, preferences, staffing requirement vs availability and gaps; usable at 360px.
+9. **M3-1 Manager dashboard** (including a warning when a submission window has opened while the preceding schedule is unpublished) — submission status, non-submitters, preferences, staffing requirement vs availability and gaps; usable at 360px.
 10. **M3-2 Scheduling engine and validator** — deterministic greedy plus repair, independent validator, property tests for hard constraints, unfilled slots with reasons, facts in `schedules.run_json`.
 11. **M3-3 Draft/publish and schedule views** — draft refused before the deadline, explicit publish confirmation (first publication of a week's schedule can open the next week's submission window early), draft vs published labels, day-by-day mobile view, employees see only their own shifts, audit rows.
 
@@ -34,7 +34,7 @@ Legend: ★ essential for course submission · ◇ deferrable.
 13. **M5-1 Post-deadline change requests** — separate screen, structured items, pending/approved/rejected, approval re-validates and updates availability, conflicts with published shifts surfaced not auto-resolved, copy states it is not a cancellation.
 
 **M6 Daily brief ◇**
-14. **M6-1 Deterministic daily brief and cron** — section titled `הגשת משמרות לשבוע הבא`, DB facts only, DST-safe schedule, idempotent via audit row.
+14. **M6-1 Deterministic daily brief and cron** (including the same unpublished-preceding-schedule warning) — section titled `הגשת משמרות לשבוע הבא`, DB facts only, DST-safe schedule, idempotent via audit row.
 
 **M7 Hardening ◇**
 15. **M7-1 Evals baseline, runbook verification, final responsive pass** — spend approved first; each runbook entry marked verified or planned.

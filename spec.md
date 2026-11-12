@@ -42,15 +42,16 @@ Out of Phase 1: everything in §10 (Phase 2) and §11 (exclusions).
   - Before the window opens the form is not available and the server rejects submissions; the employee sees when it opens (publication of the preceding schedule, or Thursday 22:00 at the latest).
   - The opening instant is **derived**, not stored: it is a pure function of the target week and the first publication time of the preceding week's schedule. Publishing early opens the window; later re-publishing or edits never move it, and publication after Thursday 22:00 changes nothing.
   - The manager still **cannot generate a draft before the relevant deadline**; the preceding week's schedule can only be published after its own deadline and draft, so a window never opens before that deadline.
-  - Not implemented yet: this belongs to the availability and deadline issues (#5, #6, #11), not to the UI shell.
+  - Not implemented yet: this belongs to the availability and deadline issues (#5, #6, #11), not to the UI shell. The decisions in "Confirmed decisions about the opening rule" below settle the first cycle, what counts as publishing, and an unpublished preceding schedule.
 - Before the deadline: employees create/edit/resubmit freely; latest values win; no manager approval; no snapshots or version history of the original submission.
 - After the deadline: the form is read-only (employee sees own submission); changes go through a separate change request needing manager approval.
 - The manager **cannot generate a draft before the deadline**. Server rejects it.
 
-**Open questions about the opening rule (recommendations, not decisions)**
-- The very first cycle has no preceding schedule: recommend that it opens by the Thursday 22:00 rule only (or by a seeded opening time for the demo).
-- "Publishes" means the first publication of that week's schedule; recommend using the earliest `published_at`, so later superseding publications do not matter.
-- A week whose preceding schedule is never published simply opens at Thursday 22:00; nothing else is needed.
+**Confirmed decisions about the opening rule [APPROVED 2026-11-12]**
+1. **First cycle.** When no preceding schedule exists, submissions open automatically at Thursday 22:00, Asia/Jerusalem. A **non-production-only** clock override exists for testing and demonstration. There is no separate manual "open submissions" workflow.
+2. **What counts as publishing.** Only the **first publication** of the preceding week's schedule can open the next window early. Later revisions, corrections or republications never change the opening time, and approved schedule modifications are not new first publications.
+3. **Unpublished preceding schedule.** The next window still opens automatically at Thursday 22:00. Publishing late does not change a window that is already open. The Tuesday deadline is **never** extended automatically. Unapproved draft schedules are **never** shown to employees.
+4. **Warning (later).** The manager dashboard and the daily brief should eventually show a warning when a new submission window has opened while the preceding week's schedule is still unpublished. This is a requirement of those later issues (#9, #14); nothing is built for it yet.
 
 ## 5. Employee workflow
 
@@ -75,7 +76,7 @@ Out of Phase 1: everything in §10 (Phase 2) and §11 (exclusions).
 
 Dashboard (mobile-usable): submission status for the target week; employees who have not submitted; each submission with preferences/requests; pending change requests; staffing requirements vs availability and coverage gaps; draft and published schedules (clearly labelled); Copilot access.
 
-1. Before the deadline: monitor submissions. No draft generation.
+1. Before the deadline: monitor submissions. No draft generation. If a new submission window has opened while the preceding week's schedule is still unpublished, the dashboard shows a warning (issue #9).
 2. After the deadline: request **draft generation** (button or Copilot). Result may be partial; uncovered shifts are listed explicitly.
 3. Review, adjust (preferably via Copilot proposals, §8), then **explicitly approve and publish**. Publishing is never automatic. [APPROVED]
 4. Post-publish changes are made only through validated, explicitly confirmed changes; unrelated assignments are never reshuffled.
@@ -163,7 +164,7 @@ Manager
 12. Infeasible input yields a partial/infeasible report, never an invalid schedule.
 13. Publish requires explicit confirmation; draft vs published visibly distinct.
 14. Copilot answers the six example questions via tools; a change request to the Copilot to modify a published assignment produces a *proposal* and does nothing until the manager confirms in the UI; an invalid proposal is refused with the violated rule.
-15. Daily brief contains the exact section title and only database-backed facts; `POST /internal/digest` works with the cron secret.
+15. Daily brief contains the exact section title and only database-backed facts; `POST /internal/digest` works with the cron secret. When a submission window is open and the preceding week's schedule is unpublished, the brief says so (confirmed 2026-11-12).
 
 Cross-cutting
 16. All UI text Hebrew, RTL, mobile checks at 4 widths recorded in the PR (practice.md).
