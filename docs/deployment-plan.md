@@ -8,7 +8,7 @@ Plan first · test locally · CI as quality gate · secrets only in Variables ·
 ## Pre-deploy blockers
 1. `.railway/railway.ts` still references `github("MaceTenth/bakery-copilot")` and project name `bakery-copilot` → change to our fork and `smart-shift-copilot` (part of M0).
 2. Railway's GitHub app needs access to the fork (otherwise "repository not accessible").
-3. Set `MANAGER_PASSWORD` (12+ chars) and `APP_SECRET` (32+ chars); the app refuses to start in production without them. Issue demo employee codes with `python -m app.users create` against the production database and keep them out of the repo. **Verify Railway's client-IP header before setting `CLIENT_IP_HEADER`** (see `architecture.md` section 7); until then the per-IP login limit stays off.
+3. Set `MANAGER_PASSWORD` (12+ chars) and `APP_SECRET` (32+ chars); the app refuses to start in production without them. Seed the demo data with `railway run python -m app.seed --confirm-fictional` (codes are printed once; keep them out of the repo) or issue codes with `python -m app.users create` against the production database and keep them out of the repo. **Verify Railway's client-IP header before setting `CLIENT_IP_HEADER`** (see `architecture.md` section 7); until then the per-IP login limit stays off.
 4. CI green on SQLite and Postgres.
 
 ## Target

@@ -32,8 +32,21 @@ Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/esc
 ## 5. Employee submission failures [PLANNED]
 - **Symptoms:** "הגשה נכשלה", 4xx/5xx on `PUT /api/availability`. **Signals:** `availability_submitted` absent; validation error type; 409 = deadline passed. **Diagnose:** is the week row present; employee id from session; payload dates inside the week. **Recover:** fix cause; employee resubmits (before deadline). If a legitimate submission was lost at the deadline boundary → manager decides (no silent reopen; use a change request). **Verify:** submission visible on manager dashboard. **Escalate:** repeated 500s → rollback.
 
-## 6. Deadline / timezone errors [PLANNED]
-- **Symptoms:** form locked early/late, DST week off by one hour. **Signals:** `deadline_state` events with computed `deadline_at` (UTC) and local time. **Diagnose:** `TIMEZONE` variable; container tz database present (`tzdata` in requirements); `CLOCK_OVERRIDE` must be unset in production (startup refuses it). **Recover:** fix config; if a week row has a wrong `deadline_at`, correct via a reviewed migration/script, never by hand. **Verify:** deadline unit tests incl. DST weeks; compare displayed deadline to Tuesday 22:00 Israel.
+## 6. Deadline / timezone errors [EXISTS: rules, clock and status endpoint; the availability form that uses them is #6]
+- **Symptoms:** the window shows open or closed at the wrong time, a DST week is an hour off, the status says `not_open` when the manager expects it open, or every date looks stuck.
+- **Signals:** `GET /api/cycle` (signed in) returns `state`, `opens_at`, `closes_at` (Asia/Jerusalem with offset) and `clock_overridden`; `window_rejected` log events (week, state); `/health` and the `app_start` event show `clock: override` when the clock is frozen.
+- **Diagnose:**
+  - *Clock frozen by mistake:* `clock_overridden: true` or `clock: override` means `CLOCK_OVERRIDE` is set. It is refused when `APP_ENV=production`, so this can only happen on a non-production deployment. Unset it and redeploy.
+  - *Opens late:* a window opens at Thursday 22:00 Asia/Jerusalem at the latest, or at the first publication of the preceding week's schedule if that is earlier. Until schedules exist (M3) only the Thursday rule applies. `opens_early_on_publication` says whether a publication could still open it early.
+  - *Wrong hour:* the cycle rules are fixed to Asia/Jerusalem and ignore the `TIMEZONE` variable (which only affects the daily spend limit and the digest). Check the host's `tzdata` (the `tzdata` package is a dependency). Compare `closes_at` with Tuesday 22:00 local for the week; around the two Israel DST changes (late March, late October) the UTC offset differs between Thursday and Tuesday, which is correct.
+  - *409 on a write:* the week's window is not open (`not_open`) or has closed. Nothing extends the Tuesday deadline automatically; a late change goes through a change request (M5).
+- **Recover:** fix configuration and redeploy; data is never edited by hand. If a legitimate submission was refused at the boundary, the manager decides (a change request), the rule is not bent.
+- **Verify:** `GET /api/cycle` shows the expected week and times; `python -m pytest -q tests/test_cycle.py` passes in CI.
+- **Escalate:** a computed deadline that is not Tuesday 22:00 local is a P1 bug in `app/cycle.py`.
+
+## 6a. Seeding the fictional demo data [EXISTS]
+- `python -m app.seed` creates the two demo shifts and eight fictional employees if missing; re-running creates nothing and never changes an existing shift's settings. In production it needs `--confirm-fictional`. Access codes are printed once to the terminal: store them out of band; they cannot be shown again (`python -m app.users rotate "Name"` issues a new one).
+- **Failures:** "migrations pending" or `UndefinedTable` means run `alembic upgrade head` first. A name clash with the manager's `MANAGER_NAME` stops the manager bootstrap, not the seed. To change a shift's time or staffing, update the `shifts` row through a reviewed script or migration; the seed will not.
 
 ## 7. Schedule generation failure [PLANNED]
 - **Symptoms:** draft request errors; **Signals:** `draft_generated` missing, `schedule_validation_failed`. **Diagnose:** before deadline (expected 409)? engine exception vs validator rejection (engine bug → output is withheld by design). **Recover:** retry; file a bug with the `schedules.run_json` (schedule id) and inputs hash (no personal text). **Verify:** draft generated, validator clean. **Escalate:** a validator rejection is a P1 bug; do not publish.

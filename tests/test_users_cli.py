@@ -5,13 +5,22 @@ import pytest
 
 from app import users as users_module
 from app.audit import AuditError
+from sqlalchemy import func
+
 from app.db import AuditLog, SessionLocal, User
 from app.users import UserError, create_employee, list_users, main, rotate_code
 
 CODE_RE = re.compile(r"\b[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}\b")
 
 
+def _audit_floor():
+    """Highest audit id so far. SQLite reuses ids of deleted users, and audit rows are append-only, so tests look only at new rows."""
+    with SessionLocal() as s:
+        return s.query(func.coalesce(func.max(AuditLog.id), 0)).scalar()
+
+
 def test_create_prints_the_code_once_and_stores_only_a_hash(capsys, log_lines):
+    floor = _audit_floor()
     assert main(["create", "Cli Person"]) == 0
     out = capsys.readouterr().out
     code = CODE_RE.search(out).group(0)
@@ -19,7 +28,7 @@ def test_create_prints_the_code_once_and_stores_only_a_hash(capsys, log_lines):
         user = s.query(User).filter_by(name="Cli Person").one()
         assert user.access_role == "employee" and user.code_hash.startswith("scrypt$")
         assert code not in user.code_hash and code.replace("-", "") not in user.code_hash
-        rows = s.query(AuditLog).filter_by(entity="user", entity_id=str(user.id)).all()
+        rows = s.query(AuditLog).filter(AuditLog.id > floor, AuditLog.entity == "user", AuditLog.entity_id == str(user.id)).all()
         assert [r.action for r in rows] == ["user.created"]
         assert code not in str(rows[0].after_json) and "scrypt" not in str(rows[0].after_json)
         assert rows[0].after_json == {"name": "Cli Person", "access_role": "employee"}
@@ -37,13 +46,14 @@ def test_list_shows_names_and_roles_but_never_codes_or_hashes(capsys):
 
 
 def test_rotate_issues_a_new_code_and_audits_without_it(db, capsys):
+    floor = _audit_floor()
     user, old = create_employee(db, "Rotated Person")
     before = user.token_version
     assert main(["rotate", "Rotated Person"]) == 0
     new = CODE_RE.search(capsys.readouterr().out).group(0)
     db.refresh(user)
     assert new != old and user.token_version == before + 1
-    rows = db.query(AuditLog).filter_by(entity="user", entity_id=str(user.id)).order_by(AuditLog.id).all()
+    rows = db.query(AuditLog).filter(AuditLog.id > floor, AuditLog.entity == "user", AuditLog.entity_id == str(user.id)).order_by(AuditLog.id).all()
     assert [r.action for r in rows] == ["user.created", "user.code_rotated"]
     assert new not in str([r.after_json for r in rows])
 

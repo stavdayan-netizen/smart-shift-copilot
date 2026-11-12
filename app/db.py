@@ -6,7 +6,7 @@ model change needs a migration (practice.md section 6); a test fails if they dri
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 
 from sqlalchemy import (
     JSON,
@@ -17,8 +17,11 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
+    UniqueConstraint,
     create_engine,
     text,
+    Date,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -112,6 +115,63 @@ class AuditLog(Base):
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # links an audit row to its log lines
     before_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     after_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+
+
+class Shift(Base):
+    """A shift definition and its staffing requirement. Configurable data, never hard-coded rules.
+
+    `start_time` and `end_time` are wall-clock times in the business timezone (Asia/Jerusalem). When
+    `end_time <= start_time` the shift ends on the NEXT calendar day, so 16:00-00:00 is eight hours and
+    ends at midnight (app/shifts.py computes the real interval for a given day).
+    """
+
+    __tablename__ = "shifts"
+    __table_args__ = (
+        CheckConstraint("required_staff >= 0", name="ck_shifts_required_staff"),
+        CheckConstraint("start_time <> end_time", name="ck_shifts_times_differ"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(40), unique=True)
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    required_staff: Mapped[int] = mapped_column(Integer, default=2)
+
+
+class AvailabilitySubmission(Base):
+    """One employee's availability and preferences for one workweek (identified by its Sunday). Latest values only."""
+
+    __tablename__ = "availability_submissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "week_start", name="uq_submission_user_week"),
+        CheckConstraint("pref_min IS NULL OR pref_min >= 0", name="ck_submission_pref_min"),
+        CheckConstraint("pref_max IS NULL OR pref_max >= 0", name="ck_submission_pref_max"),
+        CheckConstraint("pref_min IS NULL OR pref_max IS NULL OR pref_min <= pref_max", name="ck_submission_pref_order"),
+        CheckConstraint("free_text IS NULL OR length(free_text) <= 1000", name="ck_submission_free_text_len"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    week_start: Mapped[date] = mapped_column(Date, index=True)  # always a Sunday (checked in app/cycle.py)
+    pref_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pref_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    free_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    slots: Mapped[list["AvailabilitySlot"]] = relationship(back_populates="submission", cascade="all, delete-orphan")
+    # (no passive_deletes: SQLite does not enforce ON DELETE CASCADE, so the ORM deletes the slots itself;
+    #  PostgreSQL also has the database-level cascade for deletes that bypass the ORM)
+
+
+class AvailabilitySlot(Base):
+    """One shift on one day the employee can work."""
+
+    __tablename__ = "availability_slots"
+    __table_args__ = (UniqueConstraint("submission_id", "day", "shift_id", name="uq_slot_submission_day_shift"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("availability_submissions.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    shift_id: Mapped[int] = mapped_column(ForeignKey("shifts.id"), index=True)
+    submission: Mapped[AvailabilitySubmission] = relationship(back_populates="slots")
 
 
 # ---------------------------------------------------------------------------

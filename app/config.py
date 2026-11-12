@@ -64,6 +64,7 @@ class Settings:
     manager_password: str | None
     client_ip_header: str | None
     allowed_origins: str | None
+    clock_override: str | None
     app_secret: str
     database_url: str
     anthropic_api_key: str | None
@@ -111,6 +112,18 @@ def load_settings() -> Settings:
         if weak:
             raise RuntimeError("Weak secrets in production: " + "; ".join(weak))
 
+    clock_override = (_env("CLOCK_OVERRIDE") or "").strip() or None
+    if clock_override is not None:
+        if environment == "production":
+            raise RuntimeError("CLOCK_OVERRIDE is not allowed in production")
+        from datetime import datetime as _dt
+        try:
+            parsed = _dt.fromisoformat(clock_override.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise RuntimeError("CLOCK_OVERRIDE must be an ISO-8601 instant with a UTC offset, for example 2026-11-17T21:59:30+02:00") from exc
+        if parsed.tzinfo is None:
+            raise RuntimeError("CLOCK_OVERRIDE needs a UTC offset (for example +02:00 or Z); a bare local time is ambiguous")
+
     database_url = _env("DATABASE_URL", "sqlite:///./local.db")
     # Railway's Postgres plugin hands out postgresql:// URLs; SQLAlchemy needs the driver name.
     if database_url.startswith("postgres://"):
@@ -122,6 +135,7 @@ def load_settings() -> Settings:
         manager_name=" ".join((_env("MANAGER_NAME", "manager") or "manager").split()),
         manager_password=manager_password,
         allowed_origins=_env("ALLOWED_ORIGINS"),
+        clock_override=clock_override,
         client_ip_header=(_env("CLIENT_IP_HEADER") or "").strip().lower() or None,
         app_secret=app_secret or secrets.token_hex(32),
         database_url=database_url,

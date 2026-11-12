@@ -58,7 +58,7 @@ Out of Phase 1: everything in §10 (Phase 2) and §11 (exclusions).
 **Main form heading (exact):** `הגשת משמרות לשבוע הבא`
 
 1. Sees the target week with real dates, the window state (not open yet, with when it opens / open, with the deadline countdown / closed) and the submission state (not submitted / submitted / locked) prominently.
-2. For each day, selects the shifts they can work. Shift definitions are configurable data; the MVP demo uses **two shifts per day: בוקר (Morning) and ערב (Evening)**, with a default staffing requirement of **2 employees per shift**. No night shift in the MVP. [APPROVED 2026-11-11] Shift names, times and `required_staff` live in a small `shifts` table seeded by migration/seed script; there is no admin UI for them in Phase 1.
+2. For each day, selects the shifts they can work. Shift definitions are configurable data; the MVP demo uses **two shifts per day: בוקר (Morning) and ערב (Evening)**, with a default staffing requirement of **2 employees per shift**. No night shift in the MVP. [APPROVED 2026-11-11] Shift names, times and `required_staff` are **database data** in the `shifts` table, never hard-coded scheduling rules. The demo values are **Morning 08:00-16:00** and **Evening 16:00-00:00**, where an end time at or before the start time means the shift ends on the **following calendar day** (so Evening ends at midnight, eight hours later). The seed command creates missing shifts and **never modifies an existing shift's settings**; there is no admin UI for them in Phase 1. [APPROVED 2026-11-12]
 3. Per-day shortcuts (UI only, not availability states): **`כל המשמרות`** selects every shift that day; **`לא זמין/ה`** clears the day. Editing any single checkbox afterwards just changes the selection; the shortcut buttons never hold state of their own.
 4. Separate section: **preferred minimum / maximum shifts per week.** Preferences, not guarantees. Notice (exact): `נשתדל להתחשב בהעדפותיך בעת הכנת הסידור, אך אין התחייבות למספר המשמרות המבוקש.` Validation: integers ≥ 0, min ≤ max, max ≤ number of available slots in the week (soft warning, not block) [PROPOSED].
 5. Separate optional free-text field for personal requests. Notice (exact): `נשתדל להתחשב בבקשות ככל האפשר, בהתאם לצורכי העסק ולאילוצי השיבוץ, אך אין התחייבות שניתן יהיה להיענות לכולן.` Length cap [PROPOSED: 1,000 chars].
@@ -173,6 +173,8 @@ Cross-cutting
 19. `python -m evals.run` meets the agreed baseline (value to be agreed after first run).
 
 ## 14. Decisions and remaining questions
+
+**Approved by the owner on 2026-11-12 (issue #5):** demo shifts Morning 08:00-16:00 and Evening 16:00-00:00 (ending the following calendar day), configurable database data; an idempotent seed that never overwrites existing shift settings; optional preference minimum/maximum and a 1,000-character free-text limit (also enforced by the database); fictional employees are `users` with the employee role; the cycle rules always use Asia/Jerusalem; `CLOCK_OVERRIDE` freezes the scheduling clock outside production and is refused in production.
 
 **Approved by the owner on 2026-11-11**
 - Deadline: Tuesday 22:00 Asia/Jerusalem for the workweek starting the following Sunday.

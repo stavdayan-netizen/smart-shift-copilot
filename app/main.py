@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from . import auth, limits, throttle
+from . import auth, clock, cycle_service, limits, throttle
 from .logging_setup import RequestContextMiddleware, configure_logging, log_event, log_exception
 from .agent import get_model_client, run_turn
 from .config import ROOT, settings
@@ -47,13 +47,16 @@ async def lifespan(app: FastAPI):
             log_exception("db_error", exc, where="startup_manager")
     if manager_state == "disabled":
         log_event("manager_login_disabled", "warning", note="MANAGER_PASSWORD is not set")
+    if clock.is_overridden():
+        log_event("clock_override_active", "warning", note="scheduling clock is frozen by CLOCK_OVERRIDE (non-production only)")
     if not throttle.ip_throttle_enabled():
         log_event("ip_throttle_disabled", "warning",
                   note="production without CLIENT_IP_HEADER: per-IP login limit is off; per-account limit still applies")
     # One line in the deploy log so a first deploy can be checked (runbook.md section 1).
     log_event("app_start", env=settings.environment, model=settings.model, provider=settings.model_provider,
               db="sqlite" if settings.is_sqlite else "postgres", schema=app.state.schema.get("state"),
-              log_level=settings.log_level, manager=manager_state)
+              log_level=settings.log_level, manager=manager_state,
+              clock="override" if clock.is_overridden() else "real")
     if app.state.schema.get("state") == "pending":
         log_event("migrations_pending", "warning", current=app.state.schema.get("current"), head=app.state.schema.get("head"))
     yield
@@ -112,6 +115,7 @@ def health(db: Session = Depends(get_db)):
         problems.append("ANTHROPIC_API_KEY missing")
     body = {"status": "ok" if not problems else "degraded", "env": settings.environment, "model": settings.model,
             "provider": settings.model_provider, "db": "sqlite" if settings.is_sqlite else "postgres", "problems": problems,
+            "clock": "override" if clock.is_overridden() else "real",
             "time": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if problems:
         log_event("health_failed", "warning", problems=problems)
@@ -189,6 +193,16 @@ def chat(payload: ChatIn, request: Request, user: User = Depends(auth.require_ma
 
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
     return StreamingResponse(sse(), media_type="text/event-stream", headers=headers)
+
+
+# ---------------------------------------------------------------------------
+# Weekly submission cycle (read-only status; the writes arrive with the availability form)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/cycle")
+def cycle_status(user: User = Depends(auth.require_user), db: Session = Depends(get_db)):
+    """Which week submissions concern now, whether its window is open, and when it opens and closes."""
+    return cycle_service.status_payload(db)
 
 
 # ---------------------------------------------------------------------------
