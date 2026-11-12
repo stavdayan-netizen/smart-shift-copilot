@@ -11,7 +11,8 @@ from app.db import Base, engine as app_engine
 from app.migrations import alembic_config, schema_status, upgrade_to_head
 from alembic import command
 
-EXPECTED_TABLES = {"users", "conversations", "messages", "runs", "audit_log", "login_throttle"}
+EXPECTED_TABLES = {"users", "conversations", "messages", "runs", "audit_log", "login_throttle",
+                   "shifts", "availability_submissions", "availability_slots"}
 
 
 @pytest.fixture
@@ -105,3 +106,33 @@ def test_0002_is_additive_existing_users_become_employees_without_a_code(tmp_pat
         row = conn.execute(text("SELECT access_role, code_hash, token_version FROM users WHERE name='Old User'")).one()
     eng.dispose()
     assert tuple(row) == ("employee", None, 0)
+
+
+def test_shift_and_availability_table_shapes():
+    insp = inspect(app_engine)
+    shifts = {c["name"]: c for c in insp.get_columns("shifts")}
+    assert {"id", "name", "start_time", "end_time", "sort_order", "required_staff"} <= set(shifts)
+    assert shifts["start_time"]["nullable"] is False and shifts["end_time"]["nullable"] is False
+    subs = {c["name"] for c in insp.get_columns("availability_submissions")}
+    assert {"user_id", "week_start", "pref_min", "pref_max", "free_text", "submitted_at", "updated_at"} <= subs
+    slots = {c["name"] for c in insp.get_columns("availability_slots")}
+    assert {"submission_id", "day", "shift_id"} <= slots
+    uniques = {tuple(u["column_names"]) for u in insp.get_unique_constraints("availability_submissions")}
+    assert ("user_id", "week_start") in uniques
+
+
+def test_0003_is_additive_and_leaves_existing_data_alone(tmp_path):
+    from sqlalchemy import text
+
+    if app_engine.dialect.name == "postgresql":
+        return  # row-level upgrade check runs on SQLite; the DDL itself is exercised on PostgreSQL by the other tests
+    url = f"sqlite:///{tmp_path / 'before3.db'}"
+    command.upgrade(alembic_config(url), "0002")
+    eng = create_engine(url)
+    with eng.begin() as conn:
+        conn.execute(text("INSERT INTO users (name, created_at, access_role, token_version) VALUES ('Before Three', '2026-01-01', 'employee', 0)"))
+    command.upgrade(alembic_config(url), "head")
+    with eng.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM users WHERE name='Before Three'")).scalar() == 1
+        assert conn.execute(text("SELECT count(*) FROM shifts")).scalar() == 0   # the seed command, not the migration, adds shifts
+    eng.dispose()

@@ -38,6 +38,8 @@ uvicorn app.main:app --reload
 
 Sign in at http://localhost:8000 as `MANAGER_NAME` with `MANAGER_PASSWORD` (set both in `.env`). Create a demo employee with `python -m app.users create "Noa Levi"`: the access code is printed once to your terminal and never stored (only its hash). `python -m app.users rotate "Noa Levi"` issues a new one.
 
+Seed the fictional demo data (two shifts, eight employees) with `python -m app.seed`; it is idempotent and never overwrites existing shift settings, and prints each new access code once. The scheduling cycle (`GET /api/cycle`) follows the approved rule: a week's submissions open at the earlier of the preceding schedule's first publication and Thursday 22:00 Asia/Jerusalem, and close the following Tuesday 22:00. For tests and demos outside production, `CLOCK_OVERRIDE=2026-11-17T21:59:30+02:00` freezes the scheduling clock (refused in production).
+
 Required environment variables (names only; values never committed): `APP_ENV`, `MANAGER_NAME`, `MANAGER_PASSWORD`, `APP_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT`, `DAILY_CAP_USD`, `TIMEZONE`, `CRON_SECRET`, `DIGEST_WEBHOOK_URL`, `LOG_LEVEL`, `SESSION_HOURS`, `CLIENT_IP_HEADER`, `ALLOWED_ORIGINS` (and `TEST_DATABASE_URL` for tests on PostgreSQL). For a keyless local run set `MODEL_PROVIDER=fake`. Planned changes are listed in `architecture.md` §10.
 
 ## User interface
