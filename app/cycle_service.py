@@ -37,8 +37,8 @@ def current(db: Session, now: datetime | None = None) -> tuple[cycle.Window, cyc
     return window, cycle.window_state(window, now), published
 
 
-def status_payload(db: Session) -> dict:
-    now = clock.now()
+def status_payload(db: Session, now: datetime | None = None) -> dict:
+    now = now or clock.now()
     window, state, published = current(db, now)
 
     def iso(dt: datetime) -> str:

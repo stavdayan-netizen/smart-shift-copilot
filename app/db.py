@@ -139,21 +139,16 @@ class Shift(Base):
 
 
 class AvailabilitySubmission(Base):
-    """One employee's availability and preferences for one workweek (identified by its Sunday). Latest values only."""
+    """One employee's availability and optional free-text preferences for one workweek (identified by its Sunday). Latest values only."""
 
     __tablename__ = "availability_submissions"
     __table_args__ = (
         UniqueConstraint("user_id", "week_start", name="uq_submission_user_week"),
-        CheckConstraint("pref_min IS NULL OR pref_min >= 0", name="ck_submission_pref_min"),
-        CheckConstraint("pref_max IS NULL OR pref_max >= 0", name="ck_submission_pref_max"),
-        CheckConstraint("pref_min IS NULL OR pref_max IS NULL OR pref_min <= pref_max", name="ck_submission_pref_order"),
         CheckConstraint("free_text IS NULL OR length(free_text) <= 1000", name="ck_submission_free_text_len"),
     )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     week_start: Mapped[date] = mapped_column(Date, index=True)  # always a Sunday (checked in app/cycle.py)
-    pref_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    pref_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
     free_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

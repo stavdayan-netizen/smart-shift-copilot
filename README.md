@@ -42,6 +42,10 @@ Seed the fictional demo data (two shifts, eight employees) with `python -m app.s
 
 Required environment variables (names only; values never committed): `APP_ENV`, `MANAGER_NAME`, `MANAGER_PASSWORD`, `APP_SECRET`, `DATABASE_URL`, `ANTHROPIC_API_KEY`, `MODEL`, `MODEL_EFFORT`, `DAILY_CAP_USD`, `TIMEZONE`, `CRON_SECRET`, `DIGEST_WEBHOOK_URL`, `LOG_LEVEL`, `SESSION_HOURS`, `CLIENT_IP_HEADER`, `ALLOWED_ORIGINS` (and `TEST_DATABASE_URL` for tests on PostgreSQL). For a keyless local run set `MODEL_PROVIDER=fake`. Planned changes are listed in `architecture.md` §10.
 
+## Employee availability form
+
+Employees submit which shifts they can work on each day of next week (`/api/availability`, screen `הגשת משמרות לשבוע הבא`), plus an optional free-text request (at most 1,000 characters; there are no shift-count preference fields). At least one shift is required; saves are limited to 20 per hour; the submission can be created and edited until Tuesday 22:00 Asia/Jerusalem, enforced on the server. Before the window opens the form explains when it opens; afterwards the submission is shown read-only. Try it with `python -m app.seed` and `CLOCK_OVERRIDE=2026-11-22T12:00:00+02:00` (non-production only). Approved later requirements (leave requests, the manager's submission report and draft authorization, reopening for one employee) are recorded in `spec.md` section 5a and are not built yet.
+
 ## User interface
 
 Hebrew, right-to-left, mobile-first, light by default (dark follows the device). The product name stays in English; all other copy is Hebrew. Managers see the Copilot chat (still placeholder replies until issue #7) and their account page; employees see a placeholder home and their account page. Heebo is self-hosted under the SIL Open Font License (`static/fonts/`). Model replies are rendered by a small safe Markdown renderer. Evidence of the responsive checks: [docs/ui-checks/m0-4/](docs/ui-checks/m0-4/README.md); re-run them with `python scripts/ui_check.py --help`.

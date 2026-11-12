@@ -114,7 +114,7 @@ def test_shift_and_availability_table_shapes():
     assert {"id", "name", "start_time", "end_time", "sort_order", "required_staff"} <= set(shifts)
     assert shifts["start_time"]["nullable"] is False and shifts["end_time"]["nullable"] is False
     subs = {c["name"] for c in insp.get_columns("availability_submissions")}
-    assert {"user_id", "week_start", "pref_min", "pref_max", "free_text", "submitted_at", "updated_at"} <= subs
+    assert {"user_id", "week_start", "free_text", "submitted_at", "updated_at"} <= subs and not {"pref_min", "pref_max"} & subs
     slots = {c["name"] for c in insp.get_columns("availability_slots")}
     assert {"submission_id", "day", "shift_id"} <= slots
     uniques = {tuple(u["column_names"]) for u in insp.get_unique_constraints("availability_submissions")}
@@ -135,4 +135,28 @@ def test_0003_is_additive_and_leaves_existing_data_alone(tmp_path):
     with eng.connect() as conn:
         assert conn.execute(text("SELECT count(*) FROM users WHERE name='Before Three'")).scalar() == 1
         assert conn.execute(text("SELECT count(*) FROM shifts")).scalar() == 0   # the seed command, not the migration, adds shifts
+    eng.dispose()
+
+
+def test_0004_drops_the_preference_columns_keeps_everything_else_and_downgrades(tmp_path):
+    from sqlalchemy import text
+
+    if app_engine.dialect.name == "postgresql":
+        return  # the DDL is exercised on PostgreSQL by the upgrade/downgrade and model-drift tests; the row check is SQLite-only
+    url = f"sqlite:///{tmp_path / 'before4.db'}"
+    command.upgrade(alembic_config(url), "0003")
+    eng = create_engine(url)
+    with eng.begin() as conn:
+        conn.execute(text("INSERT INTO users (name, created_at, access_role, token_version) VALUES ('Four', '2026-01-01', 'employee', 0)"))
+        conn.execute(text("INSERT INTO availability_submissions (user_id, week_start, pref_min, pref_max, free_text, submitted_at, updated_at)"
+                          " VALUES (1, '2026-11-29', 2, 4, 'hello', '2026-11-20', '2026-11-20')"))
+    command.upgrade(alembic_config(url), "head")
+    with eng.connect() as conn:
+        cols = {c["name"] for c in inspect(conn).get_columns("availability_submissions")}
+        assert not {"pref_min", "pref_max"} & cols
+        assert conn.execute(text("SELECT free_text FROM availability_submissions")).scalar() == "hello"
+    command.downgrade(alembic_config(url), "0003")
+    with eng.connect() as conn:
+        assert {"pref_min", "pref_max"} <= {c["name"] for c in inspect(conn).get_columns("availability_submissions")}
+        assert conn.execute(text("SELECT pref_min FROM availability_submissions")).scalar() is None
     eng.dispose()

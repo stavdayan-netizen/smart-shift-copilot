@@ -5,15 +5,17 @@
      `python -m http.server 8770`, and open http://localhost:8770/tests/js/run.html -->
 <pre id="out">running…</pre>
 <script src="/static/markdown.js"></script>
+<script src="/static/availability.js"></script>
 <script>
   (async () => {
     const lines = [];
     const log = (m) => lines.push(m);
     const origLog = console.log, origErr = console.error;
     console.log = log; console.error = log;
-    window.require = () => window.SafeMarkdown;
+    window.require = (p) => (String(p).indexOf("availability") >= 0 ? window.AvailabilityModel : window.SafeMarkdown);
     window.process = { exit: (code) => { log(code ? "FAILED" : "PASSED"); } };
-    const src = await (await fetch("/tests/js/markdown.test.js")).text();
+    const which = new URLSearchParams(location.search).get("t") || "markdown.test.js";   // ?t=availability.test.js
+    const src = await (await fetch("/tests/js/" + which)).text();
     try { new Function("require", "process", "module", src)(window.require, window.process, undefined); } catch (e) { log("ERROR " + e.message); }
     console.log = origLog; console.error = origErr;
     document.getElementById("out").textContent = lines.join("\n");

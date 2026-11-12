@@ -11,13 +11,14 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from . import auth, clock, cycle_service, limits, throttle
+from . import auth, availability, clock, cycle_service, limits, throttle
 from .logging_setup import RequestContextMiddleware, configure_logging, log_event, log_exception
 from .agent import get_model_client, run_turn
 from .config import ROOT, settings
@@ -66,6 +67,21 @@ async def lifespan(app: FastAPI):
 configure_logging(settings.log_level)
 app = FastAPI(title="Smart Shift Copilot", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None,
               openapi_url=None)  # no public API schema
+availability.register(app)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_failed(request: Request, exc: RequestValidationError):
+    """Malformed requests get a Hebrew message and the names of the bad fields, never an echo of the input."""
+    errors = [{"field": ".".join(str(p) for p in e["loc"][1:]), "type": e["type"]} for e in exc.errors()]
+    return JSONResponse({"detail": "הפרטים שנשלחו חסרים או אינם תקינים.", "errors": errors}, status_code=422)
+
+
+@app.exception_handler(availability.FieldErrors)
+async def submission_invalid(request: Request, exc: availability.FieldErrors):
+    return JSONResponse({"detail": exc.errors[0]["message"], "errors": exc.errors}, status_code=422)
+
+
 app.add_middleware(SecurityMiddleware)  # CSRF check + no-store on /api
 app.add_middleware(RequestContextMiddleware)  # outermost: logs every request, even blocked ones
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")

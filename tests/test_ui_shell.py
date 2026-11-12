@@ -60,7 +60,7 @@ def test_no_inline_handlers_and_no_external_resources():
     for name, src in (("html", HTML), ("css", CSS), ("app.js", APP_JS), ("markdown.js", MD_JS)):
         urls = [u for u in re.findall(r"https?://[^\s\"')]+", _strip_js_comments(src)) if "www.w3.org" not in u]
         assert urls == [], f"external URL in {name}: {urls}"
-    assert re.findall(r'<script[^>]+src="([^"]+)"', HTML) == ["/static/strings.js", "/static/markdown.js", "/static/app.js"]
+    assert re.findall(r'<script[^>]+src="([^"]+)"', HTML) == ["/static/strings.js", "/static/markdown.js", "/static/availability.js", "/static/app.js"]
 
 
 def test_no_inline_styles_or_scripts_so_a_strict_csp_is_possible():
@@ -244,7 +244,7 @@ def test_heebo_is_self_hosted_with_its_licence():
 
 
 def test_static_assets_are_served(client):
-    for path in ("/static/styles.css", "/static/app.js", "/static/markdown.js", "/static/strings.js",
+    for path in ("/static/styles.css", "/static/app.js", "/static/markdown.js", "/static/availability.js", "/static/strings.js",
                  "/static/fonts/heebo-hebrew-wght-normal.woff2", "/static/fonts/heebo-latin-wght-normal.woff2", "/static/fonts/OFL.txt"):
         assert client.get(path).status_code == 200, path
     page = client.get("/")
@@ -254,7 +254,7 @@ def test_static_assets_are_served(client):
 # ------------------------------------------------------------------ safety of the shell code
 def test_no_unsafe_dom_or_code_execution_in_the_ui_code():
     banned = re.compile(r"innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\s*\(|new\s+Function|setTimeout\(\s*[\"'`]|javascript:|srcdoc|\.html\(")
-    for name in ("app.js", "markdown.js"):
+    for name in ("app.js", "markdown.js", "availability.js"):
         src = _strip_js_comments((STATIC / name).read_text(encoding="utf-8"))
         assert not banned.search(src), f"unsafe construct in {name}: {banned.search(src).group(0)}"
 
@@ -275,9 +275,9 @@ def test_manager_and_employee_destinations_are_separate_and_only_implemented_one
     manager = re.search(r"manager: \[(.*?)\],\n", block, flags=re.S).group(1)
     employee = re.search(r"employee: \[(.*?)\],?\s*$", block, flags=re.S).group(1)
     assert re.findall(r'id: "(\w+)"', manager) == ["assistant", "account"]
-    assert re.findall(r'id: "(\w+)"', employee) == ["home", "account"]
+    assert re.findall(r'id: "(\w+)"', employee) == ["availability", "account"]
     assert "disabled" not in block and "soon" not in block.lower()
-    assert "({ assistant: renderAssistant, home: renderHome, account: renderAccount })" in APP_JS
+    assert "({ assistant: renderAssistant, availability: renderAvailability, account: renderAccount })" in APP_JS
 
 
 # ------------------------------------------------------------------ Hebrew API messages (authentication, session, authorization)
@@ -321,3 +321,27 @@ def test_agent_user_facing_texts_are_hebrew():
     assert HEBREW.search(agent.REFUSAL_TEXT)
     for exc in (RuntimeError("x"),):
         assert HEBREW.search(agent._friendly(exc))
+
+
+# ------------------------------------------------------------------ the availability form's copy (spec.md section 5)
+def test_the_form_uses_the_exact_approved_copy():
+    a = _strings()["availability"]
+    assert a["heading"] == "הגשת משמרות לשבוע הבא"
+    assert a["openingNotice"] == "הגשת המשמרות לשבוע הבא תיפתח לאחר פרסום סידור העבודה לשבוע הקרוב, או ביום חמישי בשעה 22:00 – המוקדם מביניהם"
+    assert a["freeNotice"] == "נשתדל להתחשב בבקשות ככל האפשר, בהתאם לצורכי העסק ולאילוצי השיבוץ, אך אין התחייבות שניתן יהיה להיענות לכולן."
+    assert (a["all"], a["none"]) == ("כל המשמרות", "לא זמין/ה")
+    assert "שלישי" in a["editUntil"] and "22:00" in a["editUntil"] and "ולערוך" in a["editUntil"]
+    assert "1,000" not in a["counter"] and "{max}" in a["counter"]
+
+
+def test_there_are_no_shift_count_preferences_in_the_ui_or_the_api_copy():
+    for text in (STRINGS_JS, APP_JS):
+        assert "pref_min" not in text and "pref_max" not in text
+    assert "מינימום" not in STRINGS_JS and "מקסימום" not in STRINGS_JS
+    assert "נשתדל להתחשב בהעדפותיך" not in STRINGS_JS   # the shift-count notice was removed with the fields
+
+
+def test_the_form_has_no_manual_opening_or_change_request_button():
+    forbidden = ("changeRequest", "change-request", "openSubmissions", "בקשת שינוי")
+    assert not any(f in APP_JS for f in forbidden)
+    assert "המשמרות שלי" not in STRINGS_JS     # employees see only their form and lock summary until schedules exist

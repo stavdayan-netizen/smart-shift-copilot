@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import Message, Run, utcnow
+from .db import AuditLog, Message, Run, utcnow
 
 
 def local_day_start_utc(now_utc: datetime | None = None) -> datetime:
@@ -43,3 +43,33 @@ def check_daily_cap(db: Session) -> None:
     spent = spend_today_usd(db)
     if spent >= settings.daily_cap_usd:
         raise HTTPException(402, f"תקציב היום (${settings.daily_cap_usd:.2f}) נוצל. אפשר לנסות שוב מחר.")
+
+
+# ---------------------------------------------------------------------------
+# Availability saves: a small per-employee limit (default 20 per hour), counted from the audit records of
+# successful saves (counts only, see app/availability.py), so it needs no extra table and survives restarts.
+# ---------------------------------------------------------------------------
+
+def saves_per_hour() -> int:
+    return settings.availability_saves_per_hour
+
+
+def _recent_saves(db: Session, user_id: int, now: datetime) -> list[datetime]:
+    return list(db.scalars(select(AuditLog.at).where(AuditLog.actor_id == user_id, AuditLog.action == "availability.submitted",
+                                                     AuditLog.at >= now - timedelta(hours=1))
+                           .order_by(AuditLog.at.desc()).limit(saves_per_hour())).all())
+
+
+def availability_saves_left(db: Session, user_id: int, now: datetime | None = None) -> int:
+    return max(0, saves_per_hour() - len(_recent_saves(db, user_id, now or utcnow())))
+
+
+def check_availability_save_limit(db: Session, user_id: int, now: datetime | None = None) -> None:
+    now = now or utcnow()
+    recent = _recent_saves(db, user_id, now)
+    if len(recent) >= saves_per_hour():
+        wait = max(1, int((recent[-1] + timedelta(hours=1) - now).total_seconds()))
+        minutes = max(1, round(wait / 60))
+        when = "בעוד דקה" if minutes == 1 else f"בעוד {minutes} דקות"
+        raise HTTPException(429, f"בוצעו {saves_per_hour()} שמירות בשעה האחרונה, וזו המגבלה. אפשר לנסות שוב {when}.",
+                            headers={"Retry-After": str(wait)})

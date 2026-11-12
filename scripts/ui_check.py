@@ -184,7 +184,7 @@ MEASURE = r"""
   const wide = [...document.querySelectorAll('body *')].filter((e) => visible(e) && !inScroller(e) && !e.closest('svg') && (e.getBoundingClientRect().right > vw + 1 || e.getBoundingClientRect().left < -1))  /* in RTL, overflow goes off the left edge and scrollWidth does not grow */
       .slice(0, 8).map((e) => e.tagName.toLowerCase() + '.' + (e.className && e.className.baseVal === undefined ? e.className : '') + ' L=' + Math.round(e.getBoundingClientRect().left) + ' R=' + Math.round(e.getBoundingClientRect().right));
   const interactive = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), textarea, summary, select, [role=button], [tabindex]:not([tabindex="-1"])')].filter(visible);
-  const small = interactive.map((e) => { const r = e.getBoundingClientRect(); return {el: e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className ? '.' + String(e.className).split(' ')[0] : ''), w: Math.round(r.width), h: Math.round(r.height)}; })
+  const small = interactive.map((e) => { const target = (e.type === 'checkbox' || e.type === 'radio') && e.closest('label') ? e.closest('label') : e; /* a checkbox is tapped through its label row */ const r = target.getBoundingClientRect(); return {el: e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') + (e.className ? '.' + String(e.className).split(' ')[0] : ''), w: Math.round(r.width), h: Math.round(r.height)}; })
       .filter((x) => (x.h < 44 || x.w < 44) && !(x.el.startsWith('summary') && x.h >= 32) && !(x.el.startsWith('input') && x.w >= 44 && x.h >= 44));
   const fontLoaded = [...document.fonts].some((f) => f.family.replace(/"/g, '') === 'Heebo' && f.status === 'loaded');
   return {
