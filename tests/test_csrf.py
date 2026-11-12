@@ -20,7 +20,7 @@ def test_state_changing_request_without_the_custom_header_is_blocked(log_lines):
     c = _browserless()
     for headers in ({}, {"X-Requested-With": "XMLHttpRequest"}, {"Content-Type": "text/plain"}):
         r = c.post("/api/login", json=LOGIN, headers=headers)
-        assert r.status_code == 403 and r.json() == {"detail": "Request blocked."}
+        assert r.status_code == 403 and r.json() == {"detail": "הבקשה נחסמה."}
         assert "set-cookie" not in r.headers
     assert {e["reason"] for e in log_lines.events("csrf_blocked")} == {"missing_header"}
     assert any(e["status"] == 403 for e in log_lines.events("request"))  # blocked requests are still logged with an id

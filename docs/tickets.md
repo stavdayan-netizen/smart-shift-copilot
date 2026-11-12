@@ -13,8 +13,8 @@ Legend: ★ essential for course submission · ◇ deferrable.
 4. **M0-4 Hebrew RTL mobile shell** — `lang=he dir=rtl`, mobile navigation, logical CSS, legal-compliance notice; 360/390/768/desktop checks recorded.
 
 **M1 Availability ★**
-5. **M1-1 Schema, seed and deadline service** — the 12 tables, 8 fictional employees, Morning/Evening × 2 staff, deadline function for Tuesday 22:00 Asia/Jerusalem (DST-week and boundary tests), `clock.now()` with non-production override.
-6. **M1-2 Availability form and API** — exact Hebrew heading and notices, real dates, day shortcuts, min/max, free text, server-enforced lock after the deadline, audit/log events. Mobile DoD.
+5. **M1-1 Schema, seed and deadline service** — the 12 tables, 8 fictional employees, Morning/Evening × 2 staff, deadline function for Tuesday 22:00 Asia/Jerusalem and the submission-window function (opens at the earlier of publication of the preceding week's schedule and Thursday 22:00, closes Tuesday 22:00; DST-week and boundary tests), `clock.now()` with non-production override.
+6. **M1-2 Availability form and API** — exact Hebrew heading and notices, real dates, day shortcuts, min/max, free text, server-enforced window (rejected before it opens, locked after the deadline; the opening rule in `spec.md` section 4), audit/log events. Mobile DoD.
 
 **M2 Copilot v1 ★ (course core)**
 7. **M2-1 Agent loop adaptation with read-only tools** — manager-only chat, Hebrew prompt, `get_submission_status` and `get_availability`, `runs.tool_trace`, cost accounting (unknown model price is an error), model/effort from env (Sonnet 5.5 / high candidate), fake-model tests, eval cases written but **not run** without approval. Mobile chat check.
@@ -25,7 +25,7 @@ Legend: ★ essential for course submission · ◇ deferrable.
 **M3 Scheduling ★**
 9. **M3-1 Manager dashboard** — submission status, non-submitters, preferences, staffing requirement vs availability and gaps; usable at 360px.
 10. **M3-2 Scheduling engine and validator** — deterministic greedy plus repair, independent validator, property tests for hard constraints, unfilled slots with reasons, facts in `schedules.run_json`.
-11. **M3-3 Draft/publish and schedule views** — draft refused before the deadline, explicit publish confirmation, draft vs published labels, day-by-day mobile view, employees see only their own shifts, audit rows.
+11. **M3-3 Draft/publish and schedule views** — draft refused before the deadline, explicit publish confirmation (first publication of a week's schedule can open the next week's submission window early), draft vs published labels, day-by-day mobile view, employees see only their own shifts, audit rows.
 
 **M4 Copilot v2 ★**
 12. **M4-1 Scheduling tools and confirmed changes** — gaps, schedule, draft generation, replacements, explanations, `propose_change` and UI confirmation with re-validation; no write without confirmation. Evals (approval required to run).

@@ -36,10 +36,10 @@ def spend_today_usd(db: Session) -> float:
 def check_rate_limit(db: Session, user_id: int) -> None:
     used = messages_last_hour(db, user_id)
     if used >= settings.rate_limit_per_hour:
-        raise HTTPException(429, f"You have sent {used} messages this hour; the limit is {settings.rate_limit_per_hour}. Try again later.")
+        raise HTTPException(429, f"שלחתם {used} הודעות בשעה האחרונה, והמגבלה היא {settings.rate_limit_per_hour}. אפשר לנסות שוב מאוחר יותר.")
 
 
 def check_daily_cap(db: Session) -> None:
     spent = spend_today_usd(db)
     if spent >= settings.daily_cap_usd:
-        raise HTTPException(402, f"Today's budget (${settings.daily_cap_usd:.2f}) is used up. Back tomorrow.")
+        raise HTTPException(402, f"תקציב היום (${settings.daily_cap_usd:.2f}) נוצל. אפשר לנסות שוב מחר.")

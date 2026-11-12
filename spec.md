@@ -37,15 +37,26 @@ Out of Phase 1: everything in §10 (Phase 2) and §11 (exclusions).
 - Workweek starts **Sunday**. The form shows the real dates of the target week (Sunday–Saturday).
 - Submission concerns the **next** workweek. Deadline = **Tuesday 22:00, Asia/Jerusalem**, the Tuesday that falls 5 days before the target Sunday. [APPROVED 2026-11-11]
 - Deadline is stored as an absolute instant (UTC) computed with the IANA `Asia/Jerusalem` zone so DST changes are handled by the tz database, never by hand-written offsets. Enforced **on the server** on every write.
+- **The submission window opens** at the **earlier** of: (a) the moment the manager **publishes the preceding week's schedule**, and (b) **Thursday 22:00, Asia/Jerusalem**, even if that schedule has not been published. It then **closes the following Tuesday at 22:00**, Asia/Jerusalem. [APPROVED 2026-11-11] In dates, for a target week starting on Sunday S: it closes on the Tuesday 5 days before S, and opens by the latest on the Thursday 10 days before S (that Thursday is 2 days after the preceding week's own Tuesday deadline).
+  - *Example.* Availability for 22–28 Nov closes Tuesday 17 Nov at 22:00. If that schedule is published on Wednesday 18 Nov, submissions for 29 Nov–5 Dec open immediately. Otherwise they open no later than Thursday 19 Nov at 22:00. They close Tuesday 24 Nov at 22:00.
+  - Before the window opens the form is not available and the server rejects submissions; the employee sees when it opens (publication of the preceding schedule, or Thursday 22:00 at the latest).
+  - The opening instant is **derived**, not stored: it is a pure function of the target week and the first publication time of the preceding week's schedule. Publishing early opens the window; later re-publishing or edits never move it, and publication after Thursday 22:00 changes nothing.
+  - The manager still **cannot generate a draft before the relevant deadline**; the preceding week's schedule can only be published after its own deadline and draft, so a window never opens before that deadline.
+  - Not implemented yet: this belongs to the availability and deadline issues (#5, #6, #11), not to the UI shell.
 - Before the deadline: employees create/edit/resubmit freely; latest values win; no manager approval; no snapshots or version history of the original submission.
 - After the deadline: the form is read-only (employee sees own submission); changes go through a separate change request needing manager approval.
 - The manager **cannot generate a draft before the deadline**. Server rejects it.
+
+**Open questions about the opening rule (recommendations, not decisions)**
+- The very first cycle has no preceding schedule: recommend that it opens by the Thursday 22:00 rule only (or by a seeded opening time for the demo).
+- "Publishes" means the first publication of that week's schedule; recommend using the earliest `published_at`, so later superseding publications do not matter.
+- A week whose preceding schedule is never published simply opens at Thursday 22:00; nothing else is needed.
 
 ## 5. Employee workflow
 
 **Main form heading (exact):** `הגשת משמרות לשבוע הבא`
 
-1. Sees the target week with real dates, deadline countdown/status, and submission state (not submitted / submitted / locked) prominently.
+1. Sees the target week with real dates, the window state (not open yet, with when it opens / open, with the deadline countdown / closed) and the submission state (not submitted / submitted / locked) prominently.
 2. For each day, selects the shifts they can work. Shift definitions are configurable data; the MVP demo uses **two shifts per day: בוקר (Morning) and ערב (Evening)**, with a default staffing requirement of **2 employees per shift**. No night shift in the MVP. [APPROVED 2026-11-11] Shift names, times and `required_staff` live in a small `shifts` table seeded by migration/seed script; there is no admin UI for them in Phase 1.
 3. Per-day shortcuts (UI only, not availability states): **`כל המשמרות`** selects every shift that day; **`לא זמין/ה`** clears the day. Editing any single checkbox afterwards just changes the selection; the shortcut buttons never hold state of their own.
 4. Separate section: **preferred minimum / maximum shifts per week.** Preferences, not guarantees. Notice (exact): `נשתדל להתחשב בהעדפותיך בעת הכנת הסידור, אך אין התחייבות למספר המשמרות המבוקש.` Validation: integers ≥ 0, min ≤ max, max ≤ number of available slots in the week (soft warning, not block) [PROPOSED].
@@ -123,6 +134,8 @@ Cancellation of published shifts, sickness reporting and no-show reporting are *
 
 **Mobile-first (mandatory).** Employees mainly use phones; manager UI fully functional on mobile. Design mobile-first; test at 360, 390, 768 px and desktop; no unintended horizontal overflow; no wide tables (schedule = day-by-day cards on narrow screens); touch targets ≥ 44×44 px; responsive dialogs; chat readable on small screens; conflicts always visible; accessible labels. Process rule in `practice.md`.
 
+**UI shell (M0-4, implemented).** One page, three views (login, manager, employee) with data-driven navigation that shows only working destinations. Light theme by default, dark by device preference; Heebo self-hosted (OFL); product name stays in English, everything else is Hebrew; Copilot replies render through a small safe Markdown renderer (paragraphs, bold, lists, tables; no HTML, links or images). Detail in `architecture.md` §3a; evidence in `docs/ui-checks/m0-4/`.
+
 **Hebrew/RTL.** `<html lang="he" dir="rtl">`, logical CSS properties (`margin-inline-*`, not left/right), natural Hebrew copy, correct Sunday-first week, Hebrew day names, `Asia/Jerusalem` dates, isolated LTR runs for numbers/times where needed.
 
 **Security.** Backend authorization on every endpoint; employees can never read another employee's availability/requests/preferences; manager-only operations protected server-side; secure cookie sessions; input validation; secrets only in env; no real personal data in the public repo.
@@ -137,7 +150,7 @@ Employee
 1. Login as an employee; see `הגשת משמרות לשבוע הבא` with real Sunday–Saturday dates and the deadline.
 2. Select shifts; `כל המשמרות` selects all of a day, `לא זמין/ה` clears it; toggling a single box afterwards behaves correctly.
 3. Min/max preference and free text have their exact notices; min > max is rejected with a Hebrew message.
-4. Resubmit before the deadline: latest values saved.
+4. Resubmit before the deadline: latest values saved. Before the window opens a write is rejected (409); the window opens at the earlier of publication of the preceding week's schedule and Thursday 22:00 Asia/Jerusalem, and closes Tuesday 22:00 (tested with a clock override, including Israel DST weeks and the boundary second).
 5. After the deadline (test with a clock override in non-production): form is read-only; a direct API write is rejected 403/409 server-side (not just UI).
 6. DST: deadline computed correctly for target weeks around Israel's DST changes (unit-tested).
 7. Change request: submit, see `pending`; manager approves → availability updates; reject → no change; both audited.

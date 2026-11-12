@@ -26,6 +26,9 @@ Plan first · test locally · CI as quality gate · secrets only in Variables ·
 ## Variables (names only)
 See `architecture.md` §10. `CLOCK_OVERRIDE` is forbidden in production (startup check). Set `APP_ENV=production`, `TIMEZONE=Asia/Jerusalem`, `DAILY_CAP_USD` low (e.g. 2–3) until measured.
 
+## Static assets
+The UI loads nothing from other origins (fonts are self-hosted, no CDN scripts), so a strict Content-Security-Policy (`default-src 'self'`) is a candidate hardening step before real use; it is **not** configured yet and is tracked in the hardening issue (#15).
+
 ## Rollback
 Deployments → previous green → Redeploy; migrations must be backward compatible one version (`runbook.md` §13, §15). Restore drill before demo day.
 

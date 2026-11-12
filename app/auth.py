@@ -34,7 +34,8 @@ from .db import User, get_db
 from .logging_setup import log_event
 
 COOKIE_NAME = "shift_session"
-GENERIC_FAILURE = "Wrong name or access code."
+GENERIC_FAILURE = "השם או קוד הגישה שגויים."
+SIGN_IN_REQUIRED = "נדרשת התחברות."
 _NAME_RE = re.compile(r"^[\w .'\-֐-׿]{2,40}$")  # latin, digits, Hebrew letters
 
 
@@ -86,7 +87,9 @@ def authenticate(db: Session, request: Request, name: str, code: str) -> User:
         wait = max(wait_name, wait_ip)
         log_event("login_blocked", "warning", scope=[s for s, w in (("name", wait_name), ("ip", wait_ip)) if w],
                   retry_after=wait)
-        raise HTTPException(429, f"Too many attempts. Try again in {max(1, round(wait / 60))} minute(s).",
+        minutes = max(1, round(wait / 60))
+        when = "בעוד דקה" if minutes == 1 else f"בעוד {minutes} דקות"
+        raise HTTPException(429, f"יותר מדי ניסיונות כושלים. אפשר לנסות שוב {when}.",
                             headers={"Retry-After": str(wait)})
 
     user = db.scalar(select(User).where(User.name == normalised)) if _NAME_RE.match(normalised) else None
@@ -112,14 +115,14 @@ def current_user(request: Request, db: Session) -> User:
     parsed = read_token(request.cookies.get(COOKIE_NAME))
     if parsed is None:
         log_event("auth_failed", reason="no_valid_session")
-        raise HTTPException(401, "Please sign in.")
+        raise HTTPException(401, SIGN_IN_REQUIRED)
     user = db.get(User, parsed[0])
     if user is None:
         log_event("auth_failed", "warning", reason="unknown_user_in_session")
-        raise HTTPException(401, "Please sign in.")
+        raise HTTPException(401, SIGN_IN_REQUIRED)
     if user.token_version != parsed[1]:
         log_event("auth_failed", reason="stale_session", user_id=user.id)
-        raise HTTPException(401, "Please sign in.")
+        raise HTTPException(401, SIGN_IN_REQUIRED)
     return user
 
 
@@ -131,7 +134,7 @@ def _require_role(role: str, request: Request, user: User) -> User:
     if user.access_role != role:
         log_event("forbidden", "warning", user_id=user.id, required=role, actual=user.access_role,
                   method=request.method)
-        raise HTTPException(403, "You do not have access to this.")
+        raise HTTPException(403, "אין הרשאה לפעולה הזו.")
     return user
 
 
@@ -152,7 +155,7 @@ require_manager.auth_level = "manager"  # type: ignore[attr-defined]
 def owned_or_404(obj: Any, user: User, owner_attr: str = "user_id") -> Any:
     """Return `obj` only if it belongs to `user`; otherwise 404, so another person's record looks nonexistent."""
     if obj is None or getattr(obj, owner_attr, None) != user.id:
-        raise HTTPException(404, "Not found.")
+        raise HTTPException(404, "לא נמצא.")
     return obj
 
 

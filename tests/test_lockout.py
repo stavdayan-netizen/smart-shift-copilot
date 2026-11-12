@@ -37,7 +37,7 @@ def test_five_failures_lock_the_account_even_for_the_right_code(client, db, cloc
     assert [_attempt(client, user.name, BAD).status_code for _ in range(5)] == [401] * 5
     blocked = _attempt(client, user.name, code)  # the correct code is refused while locked
     assert blocked.status_code == 429 and blocked.headers["retry-after"] == "60"
-    assert "Too many attempts" in blocked.json()["detail"]
+    assert "יותר מדי ניסיונות" in blocked.json()["detail"] and "בעוד דקה" in blocked.json()["detail"]
     clock(61)
     assert _attempt(client, user.name, code).status_code == 200
 

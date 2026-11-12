@@ -38,7 +38,7 @@ except ImportError:  # pragma: no cover
 MAX_TOOL_ROUNDS = 6
 SYSTEM_PATH = ROOT / "app" / "prompts" / "system.md"
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"}
-REFUSAL_TEXT = "I can't help with that request. Try rephrasing it, or ask the manager."
+REFUSAL_TEXT = "אין לי אפשרות לעזור בבקשה הזו. אפשר לנסח אותה אחרת, או לפנות למנהל/ת."
 
 
 # ---------------------------------------------------------------------------
@@ -178,14 +178,14 @@ def _summarise_result(result_text: str) -> str:
 def _friendly(exc: Exception) -> str:
     if anthropic is not None:
         if isinstance(exc, (anthropic.RateLimitError, getattr(anthropic, "OverloadedError", anthropic.RateLimitError))):
-            return "The model is busy right now. Try again in a minute."
+            return "המודל עמוס כרגע. כדאי לנסות שוב בעוד דקה."
         if isinstance(exc, anthropic.AuthenticationError):
-            return "The model key is not valid. Check ANTHROPIC_API_KEY."
+            return "מפתח המודל אינו תקין. יש לבדוק את ANTHROPIC_API_KEY."
         if isinstance(exc, anthropic.APIConnectionError):
-            return "Could not reach the model. Check the connection and try again."
+            return "אין חיבור למודל. יש לבדוק את החיבור ולנסות שוב."
         if isinstance(exc, anthropic.BadRequestError):
-            return f"The request was rejected: {exc.message if hasattr(exc, 'message') else exc}"
-    return "Something went wrong on our side. The error was recorded; try again."
+            return "הבקשה נדחתה על ידי המודל."
+    return "משהו השתבש בצד שלנו. השגיאה נרשמה, ואפשר לנסות שוב."
 
 
 def run_turn(db: Session, *, user: User, conversation: Conversation | None, text: str,
@@ -257,7 +257,7 @@ def run_turn(db: Session, *, user: User, conversation: Conversation | None, text
                 if not tool_uses:
                     break
                 if round_no >= MAX_TOOL_ROUNDS:
-                    note = "\n\nI stopped after too many tool steps. Please ask again, more specifically."
+                    note = "\n\nעצרתי אחרי יותר מדי שלבים. אפשר לשאול שוב בצורה ממוקדת יותר."
                     pieces.append(note)
                     yield {"type": "text", "text": note}
                     break
@@ -279,7 +279,7 @@ def run_turn(db: Session, *, user: User, conversation: Conversation | None, text
                 pieces.append(REFUSAL_TEXT)
                 yield {"type": "text", "text": REFUSAL_TEXT}
             elif stop.stop_reason == "max_tokens":
-                note = "\n\n(Reply cut short at the length limit.)"
+                note = "\n\n(התשובה נקטעה בגלל מגבלת האורך.)"
                 pieces.append(note)
                 yield {"type": "text", "text": note}
             break
