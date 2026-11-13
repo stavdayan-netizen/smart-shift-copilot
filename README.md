@@ -4,7 +4,7 @@ A Hebrew-first, mobile-friendly, AI-assisted weekly shift scheduling app for one
 
 ## Implementation status
 
-**Planning phase (plan approved 2026-11-11). No Smart Shift features are implemented yet.** This repository is a fork of the instructor's [Bakery Copilot](https://github.com/MaceTenth/bakery-copilot). **M0-1 (issue #1) removed the bakery domain** (sales and invoice tools, datasets, invoice UI and image upload). What remains is the reusable infrastructure: FastAPI app, the Anthropic agent loop with an empty tool registry, conversation and run persistence, per-account login (M0-3: manager and employee roles, personal access codes, database-backed lockout, CSRF defence), rate and cost limits, a generic digest skeleton, fake-model tests, evals runner, CI and the Railway IaC file. M0-2 added structured JSON logging with request IDs and redaction, Alembic migrations, an append-only `audit_log` with an atomic audit writer, and a PostgreSQL CI job. The UI is a bare English placeholder chat, not the Hebrew UI. Nothing in "Planned features" below works today.
+**Phase 1 is partly built (course-submission build). Implemented: the Hebrew RTL mobile-first UI, per-employee login (manager and employee roles, lockout, CSRF defence), the weekly submission cycle (window opens Thursday 22:00 or at the first publication of the preceding schedule, closes Tuesday 22:00, Asia/Jerusalem), the employee availability form and API, structured logging, an append-only audit log, Alembic migrations, and a manager-only Copilot (Claude) with two read-only tools: `get_submission_status` and `get_availability`.** The Copilot answers questions such as who has not submitted and when an employee can work, in Hebrew, from database facts only. **Not implemented:** the scheduling engine, building or publishing a schedule, the manager dashboard, change requests, leave requests and the daily digest. The Copilot cannot change any data. The real model has not been called from this repository yet (tests use a fake model); a production deployment needs `ANTHROPIC_API_KEY`. The app is a demo for fictional data only; the open security gates (#8, #15, #24) are listed in [ROADMAP.md](ROADMAP.md) and must be closed before real-world use. This repository is a fork of the instructor's [Bakery Copilot](https://github.com/MaceTenth/bakery-copilot).
 
 ## Relationship to Bakery Copilot
 
@@ -48,7 +48,7 @@ Employees submit which shifts they can work on each day of next week (`/api/avai
 
 ## User interface
 
-Hebrew, right-to-left, mobile-first, light by default (dark follows the device). The product name stays in English; all other copy is Hebrew. Managers see the Copilot chat (still placeholder replies until issue #7) and their account page; employees see a placeholder home and their account page. Heebo is self-hosted under the SIL Open Font License (`static/fonts/`). Model replies are rendered by a small safe Markdown renderer. Evidence of the responsive checks: [docs/ui-checks/m0-4/](docs/ui-checks/m0-4/README.md); re-run them with `python scripts/ui_check.py --help`.
+Hebrew, right-to-left, mobile-first, light by default (dark follows the device). The product name stays in English; all other copy is Hebrew. Managers see the Copilot chat (two read-only tools over availability data) and their account page; employees see a placeholder home and their account page. Heebo is self-hosted under the SIL Open Font License (`static/fonts/`). Model replies are rendered by a small safe Markdown renderer. Evidence of the responsive checks: [docs/ui-checks/m0-4/](docs/ui-checks/m0-4/README.md); re-run them with `python scripts/ui_check.py --help`.
 
 ## Tests
 
@@ -56,7 +56,7 @@ Hebrew, right-to-left, mobile-first, light by default (dark follows the device).
 
 ## Deployment
 
-Planned on Railway (web + PostgreSQL + digest cron); see [docs/deployment-plan.md](docs/deployment-plan.md). Not deployed yet; no Railway resources exist.
+Planned on Railway (web + PostgreSQL); the minimal setup is in [docs/deployment-plan.md](docs/deployment-plan.md). Not deployed yet; no Railway resources exist.
 
 ## Limitations
 

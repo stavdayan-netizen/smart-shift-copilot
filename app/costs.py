@@ -36,6 +36,9 @@ def price_table(model: str) -> dict[str, float] | None:
 def cost_usd(model: str, usage: Usage) -> float:
     table = price_table(model)
     if table is None:
+        from .logging_setup import log_event
+
+        log_event("unknown_model_price", "error", model=model, note="cost recorded as 0: add the model to PRICES_PER_MTOK in app/config.py")
         return 0.0
     total = (usage.input_tokens * table["input"] + usage.output_tokens * table["output"]
              + usage.cache_read_tokens * table["cache_read"] + usage.cache_write_tokens * table["cache_write"])
