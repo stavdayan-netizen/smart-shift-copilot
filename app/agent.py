@@ -17,13 +17,14 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Iterator, Protocol
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import cycle, cycle_service
 from .config import ROOT, settings
 from .costs import Usage, cost_usd
 from .db import Conversation, Message, Run, User, utcnow
@@ -99,9 +100,10 @@ class AnthropicModelClient:
             "max_tokens": settings.max_tokens,
             "system": system,
             "messages": messages,
-            "tools": tools,
             "output_config": {"effort": settings.model_effort},
         }
+        if tools:  # the API rejects an empty tool list; with no tools the key is simply left out
+            kwargs["tools"] = tools
         if settings.model in FALLBACK_MODELS:
             # Server-side fallback: a safety refusal on the primary model is retried on a substitute.
             kwargs["betas"] = ["server-side-fallback-2026-07-01"]
@@ -133,8 +135,14 @@ def get_model_client() -> ModelClient:
 
 def build_system(db: Session) -> list[dict]:
     today = datetime.now(ZoneInfo(settings.timezone)).date()
+    window, state, _ = cycle_service.current(db)
     text = (SYSTEM_PATH.read_text(encoding="utf-8")
-            .replace("{{TODAY}}", today.isoformat()))
+            .replace("{{TODAY}}", today.isoformat())
+            .replace("{{WEEK_START}}", window.week_start.isoformat())
+            .replace("{{WEEK_END}}", (window.week_start + timedelta(days=6)).isoformat())
+            .replace("{{WINDOW_STATE}}", state)
+            .replace("{{OPENS_AT}}", cycle.local(window.opens_at).isoformat(timespec="minutes"))
+            .replace("{{CLOSES_AT}}", cycle.local(window.closes_at).isoformat(timespec="minutes")))
     # One cached block: tools + system form the stable prefix every turn reuses.
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
 

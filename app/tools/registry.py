@@ -2,8 +2,9 @@
 
 The mechanism is kept from the instructor's code: `TOOLS` holds the JSON schemas
 the model sees, `HANDLERS` maps a tool name to a plain function over the database,
-and `execute()` runs one tool and returns a JSON string. There are no domain tools
-yet; the first read-only tools arrive with the Copilot issue (M2).
+and `execute()` runs one tool and returns a JSON string. The two read-only tools
+(app/tools/shift_tools.py) are registered below; the scheduling tools come with the
+scheduling engine (M4).
 
 A tool is added in two places that must agree:
 
@@ -20,11 +21,12 @@ from typing import Any, Callable
 from sqlalchemy.orm import Session
 
 from ..logging_setup import error_fields, log_event
+from . import shift_tools
 
 ToolHandler = Callable[[Session, dict[str, Any], "int | None"], Any]
 
-TOOLS: list[dict[str, Any]] = []
-HANDLERS: dict[str, ToolHandler] = {}
+TOOLS: list[dict[str, Any]] = list(shift_tools.TOOL_SCHEMAS)
+HANDLERS: dict[str, ToolHandler] = dict(shift_tools.HANDLERS)
 
 MAX_RESULT_CHARS = 12000
 
@@ -43,6 +45,9 @@ def execute(name: str, tool_input: dict[str, Any], db: Session, *, user_id: int 
             status, result = "unknown_tool", {"error": f"unknown tool '{name}'"}
         else:
             result = handler(db, _clean(tool_input), user_id)
+    except shift_tools.ToolInputError as exc:  # the model's input was wrong: tell it plainly so it can correct itself
+        status = "bad_input"
+        result = {"error": str(exc)}
     except Exception as exc:  # the loop must survive a bad input; the model sees the error
         status, extra = "error", error_fields(exc)
         result = {"error": f"{type(exc).__name__}: {exc}"}
