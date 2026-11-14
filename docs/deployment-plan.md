@@ -2,6 +2,19 @@
 
 **Status: PLAN. No Railway resources exist. Nothing here has been run.** Companion to the instructor's `docs/deploy-railway.md` (full CLI/dashboard walkthrough, kept as reference) and `architecture.md` §10.
 
+## Minimal setup (course submission)
+
+Dashboard route; nothing here has been run. The web service plus PostgreSQL is all that is needed; skip the digest service.
+
+1. Railway: New Project, Deploy from GitHub repo `stavdayan-netizen/smart-shift-copilot` (allow Railway's GitHub app on the fork), then add the PostgreSQL database.
+2. Web service, Settings: start command `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT`; health check path `/health`; generate a public domain.
+3. Web service, Variables: `APP_ENV=production`, `MANAGER_NAME`, `MANAGER_PASSWORD` (12+ chars), `APP_SECRET` (32+ chars, random), `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `TIMEZONE=Asia/Jerusalem`, `MODEL=claude-sonnet-5-5`, `MODEL_EFFORT=medium`, `DAILY_CAP_USD=2`, `RATE_LIMIT_PER_HOUR=20`, `PYTHONUNBUFFERED=1`, and `ANTHROPIC_API_KEY` only after the owner approves paid calls (without it the Copilot reports a key error; the rest of the app works). Never set `CLOCK_OVERRIDE`.
+4. Seed fictional data once: `railway run python -m app.seed --confirm-fictional`; the codes are printed once, keep them out of the repo.
+5. Check `/health`, sign in as the manager, open the form as an employee on a phone, ask the Copilot one question.
+6. Spending protection, three layers: the Railway workspace usage limit (Usage page: soft and hard limit), the Anthropic Console spend limit for the key, and the app's `DAILY_CAP_USD`.
+
+The form is only open between Thursday 22:00 and Tuesday 22:00 Asia/Jerusalem; outside it the form shows a Hebrew notice. Fictional data only; the security gates #8, #15, #24 remain open.
+
 ## Philosophy (from the instructor)
 Plan first · test locally · CI as quality gate · secrets only in Variables · Postgres with persistent volume and backups · health check · documented rollback · watch cost and failures.
 

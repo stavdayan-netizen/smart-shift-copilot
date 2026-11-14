@@ -297,7 +297,7 @@ def run(args) -> int:
                 if m["noAccessToManagerUI"] is not True:
                     failures.append(f"{vp}/{scheme}: employee sees the manager UI")
                 b.js("location.hash = '#/assistant'", False); settle(0.4)
-                if b.js("location.hash") != "#/home":
+                if b.js("location.hash") == "#/assistant":  # an employee is redirected to their own home (the availability form since M1-2)
                     failures.append(f"{vp}/{scheme}: employee could open #/assistant")
                 b.js("location.hash = '#/account'", False); settle(0.4)
                 record(vp, scheme, "employee-account")

@@ -65,7 +65,8 @@ Each entry: Symptoms · Signals · Diagnose · Recover · Verify · Rollback/esc
 ## 8. Unsatisfiable constraints / uncovered shifts [PLANNED]
 - Not an outage. The result lists unfilled slots with reasons. Manager options: wait for/approve change requests, contact employees, accept gaps. Verify via `get_staffing_gaps`. Escalate only if the report contradicts the data (engine bug).
 
-## 9. Agent / tool errors [PLANNED]
+## 9. Agent / tool errors [EXISTS: two read-only tools; `runs.tool_names`, `tool_executed` log]
+- Tool status `bad_input` is the model asking for an unknown employee or a non-Sunday week: normal, the model corrects itself. Status `error` is a bug: find it with the request id. `unknown_model_price` in the logs means `MODEL` is not in the price table, so costs are recorded as 0 and the daily cap is blind: fix `PRICES_PER_MTOK`.
 - **Symptoms:** Copilot replies with an error; tool chip fails. **Signals:** `tool_executed` status/error_type; `runs.tool_trace`; `runs.status='error'`. **Diagnose:** tool input validation failure vs DB error vs round limit (6). **Recover:** rephrase; fix bug via PR with an eval/test case. **Verify:** repeat the manager question. Never run ad-hoc SQL fixes; data fixes are reviewed scripts.
 
 ## 10. Anthropic API failures [EXISTS in SDK retry; events PLANNED]

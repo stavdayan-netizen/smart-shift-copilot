@@ -142,7 +142,7 @@ def load_settings() -> Settings:
         app_secret=app_secret or secrets.token_hex(32),
         database_url=database_url,
         anthropic_api_key=api_key,
-        model=_env("MODEL", "claude-opus-5-5"),
+        model=_env("MODEL", "claude-sonnet-5-5"),
         model_effort=_env("MODEL_EFFORT", "medium"),
         max_tokens=int(_env("MAX_TOKENS", "2048")),
         history_limit=int(_env("HISTORY_LIMIT", "20")),

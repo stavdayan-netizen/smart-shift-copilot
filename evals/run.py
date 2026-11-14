@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import time
 import json
 import os
 import subprocess
@@ -33,11 +34,15 @@ _tmp = Path(tempfile.mkdtemp(prefix="smart-shift-evals-"))
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_tmp / 'evals.db'}")
 os.environ.setdefault("APP_ENV", "local")
 os.environ.setdefault("DAILY_CAP_USD", "1000")
+if __name__ == "__main__":  # not when imported by the tests: it must not leak into their environment
+    os.environ.setdefault("CLOCK_OVERRIDE", "2026-11-22T12:00:00+02:00")  # same instant for every model (evals/fixtures.py)
 
 from app import agent as agent_module  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.db import Conversation, Message, SessionLocal, User  # noqa: E402
 from app.migrations import upgrade_to_head  # noqa: E402
+
+from evals import fixtures  # noqa: E402
 
 
 def git_sha() -> str:
@@ -69,6 +74,7 @@ def run_case(case: dict, client) -> dict:
             db.commit()
         conversation = _seed_history(db, user, case.get("history", []))
         text_parts, tools, usage, cost, status = [], [], {}, 0.0, "ok"
+        t0 = time.monotonic()
         for ev in agent_module.run_turn(db, user=user, conversation=conversation, text=case["input"],
                                         client=client):
             if ev["type"] == "text":
@@ -80,7 +86,8 @@ def run_case(case: dict, client) -> dict:
             elif ev["type"] == "error":
                 status = "error"
                 text_parts.append(f"[error: {ev['message']}]")
-    return {"answer": "".join(text_parts), "tools": tools, "usage": usage, "cost": cost, "status": status}
+    return {"answer": "".join(text_parts), "tools": tools, "usage": usage, "cost": cost, "status": status,
+            "latency_s": round(time.monotonic() - t0, 2)}
 
 
 def grade_facts(case: dict, result: dict) -> list[str]:
@@ -92,6 +99,11 @@ def grade_facts(case: dict, result: dict) -> list[str]:
         if t in result["tools"]:
             failures.append(f"tool {t} must not be called")
     answer = result["answer"].lower()
+    for s in exp.get("answer_contains_all", []):
+        if s.lower() not in answer:
+            failures.append(f"answer must contain {s!r}")
+    if len(result["answer"]) < exp.get("min_answer_chars", 0):
+        failures.append(f"answer shorter than {exp['min_answer_chars']} characters")
     if exp.get("answer_contains_any") and not any(s.lower() in answer for s in exp["answer_contains_any"]):
         failures.append(f"answer contains none of {exp['answer_contains_any']}")
     for s in exp.get("answer_not_contains", []):
@@ -123,6 +135,7 @@ def main() -> int:
     ap.add_argument("--judge-model", default="claude-haiku-5-5")
     ap.add_argument("--baseline", type=float, default=0.0)
     ap.add_argument("--only", help="case id")
+    ap.add_argument("--budget-usd", type=float, default=0.0, help="stop before the next call once this much has been spent (0 = no cap)")
     args = ap.parse_args()
 
     if settings.model_provider != "anthropic" or not settings.anthropic_api_key:
@@ -130,6 +143,8 @@ def main() -> int:
         return 2
 
     upgrade_to_head()
+    with SessionLocal() as db:
+        fixtures.load(db)
     client = agent_module.get_model_client()
     cases = yaml.safe_load((HERE / "cases.yaml").read_text(encoding="utf-8"))
     if args.only:
@@ -144,6 +159,9 @@ def main() -> int:
     details = []
     for case in cases:
         for n in range(args.runs):
+            if args.budget_usd and cost >= args.budget_usd:
+                print(f"budget ${args.budget_usd:.2f} reached after ${cost:.4f}; stopping", file=sys.stderr)
+                break
             total += 1
             result = run_case(case, client)
             failures = grade_facts(case, result)
@@ -156,7 +174,8 @@ def main() -> int:
             tokens_in += int(result["usage"].get("input_tokens", 0))
             tokens_out += int(result["usage"].get("output_tokens", 0))
             cost += float(result["cost"] or 0)
-            print(f"{'PASS' if ok else 'FAIL'}  {case['id']}" + (f" (run {n + 1})" if args.runs > 1 else ""))
+            print(f"{'PASS' if ok else 'FAIL'}  {case['id']}" + (f" (run {n + 1})" if args.runs > 1 else "")
+                  + f"  {result['latency_s']}s  tools={result['tools']}  ${float(result['cost'] or 0):.4f}")
             for f in failures:
                 print(f"      - {f}")
             details.append({"id": case["id"], "run": n + 1, "ok": ok, "failures": failures, **result})
