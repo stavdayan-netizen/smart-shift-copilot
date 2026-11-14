@@ -222,3 +222,9 @@ def test_eval_cases_only_name_existing_tools():
         assert c["input"] and c["rubric"]
         for t in c["expect"].get("tools_called", []) + c["expect"].get("tools_not_called", []):
             assert t in registry.HANDLERS
+
+
+def test_the_fake_model_is_free_and_silent(caplog):
+    with caplog.at_level(logging.ERROR):
+        assert cost_usd("fake", Usage(1000, 1000)) == 0.0
+    assert "unknown_model_price" not in caplog.text

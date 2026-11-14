@@ -36,6 +36,8 @@ def price_table(model: str) -> dict[str, float] | None:
 def cost_usd(model: str, usage: Usage) -> float:
     table = price_table(model)
     if table is None:
+        if model == "fake":  # the test model is free by definition
+            return 0.0
         from .logging_setup import log_event
 
         log_event("unknown_model_price", "error", model=model, note="cost recorded as 0: add the model to PRICES_PER_MTOK in app/config.py")
