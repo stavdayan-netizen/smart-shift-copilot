@@ -34,7 +34,8 @@ _tmp = Path(tempfile.mkdtemp(prefix="smart-shift-evals-"))
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_tmp / 'evals.db'}")
 os.environ.setdefault("APP_ENV", "local")
 os.environ.setdefault("DAILY_CAP_USD", "1000")
-os.environ.setdefault("CLOCK_OVERRIDE", "2026-11-22T12:00:00+02:00")  # same instant for every model (evals/fixtures.py)
+if __name__ == "__main__":  # not when imported by the tests: it must not leak into their environment
+    os.environ.setdefault("CLOCK_OVERRIDE", "2026-11-22T12:00:00+02:00")  # same instant for every model (evals/fixtures.py)
 
 from app import agent as agent_module  # noqa: E402
 from app.config import settings  # noqa: E402
