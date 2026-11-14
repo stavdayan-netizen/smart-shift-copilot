@@ -68,7 +68,7 @@ def _seed_history(db, user: User, turns: list[dict]) -> Conversation | None:
 
 def run_case(case: dict, client) -> dict:
     with SessionLocal() as db:
-        user = db.query(User).filter_by(name="eval").one_or_none() or User(name="eval")
+        user = db.query(User).filter_by(name="eval").one_or_none() or User(name="eval", access_role="manager")
         if user.id is None:
             db.add(user)
             db.commit()

@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import cycle, cycle_service
+from . import clock, cycle, cycle_service
 from .config import ROOT, settings
 from .costs import Usage, cost_usd
 from .db import Conversation, Message, Run, User, utcnow
@@ -135,7 +135,7 @@ def get_model_client() -> ModelClient:
 # ---------------------------------------------------------------------------
 
 def build_system(db: Session) -> list[dict]:
-    today = datetime.now(ZoneInfo(settings.timezone)).date()
+    today = clock.now().astimezone(ZoneInfo(settings.timezone)).date()  # the same clock the tools use (frozen in demos and evals)
     window, state, _ = cycle_service.current(db)
     text = (SYSTEM_PATH.read_text(encoding="utf-8")
             .replace("{{TODAY}}", today.isoformat())

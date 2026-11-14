@@ -72,4 +72,4 @@ def test_only_the_scheduling_cycle_uses_the_overridable_clock():
     import re
 
     used_by = {p.name for p in pathlib.Path(config.ROOT, "app").glob("*.py") if re.search(r"\bclock\.now\(\)", p.read_text(encoding="utf-8"))}
-    assert used_by <= {"cycle_service.py", "clock.py", "main.py", "availability.py"}, used_by   # the cycle and what shows or gates it
+    assert used_by <= {"cycle_service.py", "clock.py", "main.py", "availability.py", "agent.py"}, used_by   # the cycle and what shows or gates it (agent.py: the prompt states "today" next to the cycle window)

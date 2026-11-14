@@ -228,3 +228,8 @@ def test_the_fake_model_is_free_and_silent(caplog):
     with caplog.at_level(logging.ERROR):
         assert cost_usd("fake", Usage(1000, 1000)) == 0.0
     assert "unknown_model_price" not in caplog.text
+
+
+def test_the_prompt_uses_the_scheduling_clock_for_today(db):
+    text = agent.build_system(db)[0]["text"]
+    assert "Today is 2026-11-22" in text   # frozen_open fixture, not the real date
