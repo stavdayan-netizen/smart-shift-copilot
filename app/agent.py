@@ -100,8 +100,9 @@ class AnthropicModelClient:
             "max_tokens": settings.max_tokens,
             "system": system,
             "messages": messages,
-            "output_config": {"effort": settings.model_effort},
         }
+        if settings.model_effort:  # empty MODEL_EFFORT omits the parameter (for models that do not take it)
+            kwargs["output_config"] = {"effort": settings.model_effort}
         if tools:  # the API rejects an empty tool list; with no tools the key is simply left out
             kwargs["tools"] = tools
         if settings.model in FALLBACK_MODELS:
