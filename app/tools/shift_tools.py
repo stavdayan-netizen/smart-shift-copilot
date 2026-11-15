@@ -79,15 +79,30 @@ def _week(db: Session, raw: Any) -> tuple[date, cycle.Window]:
     return week, cycle.submission_window(week, lookup(week - timedelta(days=7)))
 
 
+HEBREW_WEEKDAYS = ["יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת", "יום ראשון"]  # date.weekday(): Monday = 0
+
+
+def weekday_he(d) -> str:
+    """The Hebrew weekday name of a date: computed here so the model never has to work it out."""
+    return HEBREW_WEEKDAYS[d.weekday()]
+
+
 def _local_iso(dt) -> str:
     return cycle.local(dt).isoformat(timespec="minutes")
+
+
+def _local_with_weekday(dt) -> str:
+    local = cycle.local(dt)
+    return f"{weekday_he(local.date())}, {local.strftime('%d.%m.%Y %H:%M')}"
 
 
 def _window_json(week: date, window: cycle.Window) -> dict:
     now = clock.now()
     return {"week_start": week.isoformat(), "week_end": (week + timedelta(days=6)).isoformat(),
             "window_state": cycle.window_state(window, now), "opens_at": _local_iso(window.opens_at),
-            "closes_at": _local_iso(window.closes_at), "timezone": "Asia/Jerusalem"}
+            "closes_at": _local_iso(window.closes_at), "timezone": "Asia/Jerusalem",
+            "week_start_weekday": weekday_he(week), "week_end_weekday": weekday_he(week + timedelta(days=6)),
+            "opens_at_he": _local_with_weekday(window.opens_at), "closes_at_he": _local_with_weekday(window.closes_at)}
 
 
 def get_submission_status(db: Session, tool_input: dict[str, Any], user_id: int | None = None) -> dict[str, Any]:
@@ -140,7 +155,7 @@ def get_availability(db: Session, tool_input: dict[str, Any], user_id: int | Non
         by_day.setdefault(slot.day, []).append({
             "shift": s.name if s else "?", "from": s.start_time.strftime("%H:%M") if s else None,
             "to": s.end_time.strftime("%H:%M") if s else None, "ends_next_day": bool(s and s.end_time <= s.start_time)})
-    days = [{"date": d.isoformat(), "weekday_index_from_sunday": (d - week).days, "shifts": sorted(v, key=lambda x: x["from"] or "")}
+    days = [{"date": d.isoformat(), "weekday": weekday_he(d), "weekday_index_from_sunday": (d - week).days, "shifts": sorted(v, key=lambda x: x["from"] or "")}
             for d, v in sorted(by_day.items())]
     return {**base, "submitted": True, "last_updated": sub.updated_at.isoformat(timespec="minutes") + "Z", "shifts_offered": len(sub.slots),
             "days": days, "free_text": sub.free_text,
