@@ -59,6 +59,33 @@
     return n === 0 ? "none" : n === shifts.length ? "all" : "some";
   }
 
+  /* "Unavailable" days. `off` is a plain object {day: true}. Choosing "לא זמין/ה" clears the day's shifts and marks the day
+     (its checkboxes are then disabled); choosing it again only unmarks it, and "כל המשמרות" unmarks it and selects every
+     shift. The marker is display state: the server stores slots only, so on load a day with no slots of an existing
+     submission is shown as unavailable (the employee chose it), and before the first submission no day is. */
+  function offFromSlots(slots, days, submitted) {
+    var off = {};
+    if (!submitted) return off;
+    var withSlots = {};
+    (slots || []).forEach(function (s) { withSlots[s.day] = true; });
+    (days || []).forEach(function (d) { if (!withSlots[d]) off[d] = true; });
+    return off;
+  }
+
+  function isOff(off, day) { return !!off[day]; }
+
+  function toggleOff(sel, off, day) {
+    var nextOff = {}; Object.keys(off).forEach(function (k) { if (off[k]) nextOff[k] = true; });
+    if (nextOff[day]) { delete nextOff[day]; return { sel: copy(sel), off: nextOff }; }
+    nextOff[day] = true;
+    return { sel: clearDay(sel, day), off: nextOff };
+  }
+
+  function selectAllDay(sel, off, day, shifts) {
+    var nextOff = {}; Object.keys(off).forEach(function (k) { if (off[k] && k !== day) nextOff[k] = true; });
+    return { sel: selectAll(sel, day, shifts), off: nextOff };
+  }
+
   function equal(a, b) {
     var ka = Object.keys(a).filter(function (k) { return a[k]; }).sort(), kb = Object.keys(b).filter(function (k) { return b[k]; }).sort();
     return ka.length === kb.length && ka.every(function (k, i) { return k === kb[i]; });
@@ -87,7 +114,7 @@
   }
 
   var api = { TEXT_MAX: TEXT_MAX, key: key, fromSlots: fromSlots, toSlots: toSlots, has: has, toggle: toggle, selectAll: selectAll,
-              clearDay: clearDay, countDay: countDay, count: count, dayState: dayState, equal: equal, textLength: textLength,
+              clearDay: clearDay, offFromSlots: offFromSlots, isOff: isOff, toggleOff: toggleOff, selectAllDay: selectAllDay, countDay: countDay, count: count, dayState: dayState, equal: equal, textLength: textLength,
               problems: problems, isDirty: isDirty, splitDuration: splitDuration };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AvailabilityModel = api;
