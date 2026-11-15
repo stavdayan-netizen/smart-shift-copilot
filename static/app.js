@@ -127,8 +127,48 @@
   function showApp() {
     show("app");
     $("appbar-name").textContent = state.user.name;
+    setupUserMenu();
     renderNav();
     route();
+  }
+  // The top-corner user menu (both roles): who is signed in, my account, sign out.
+  function setupUserMenu() {
+    const btn = $("user-btn"), menu = $("user-menu");
+    closeUserMenu(false);
+    btn.setAttribute("aria-haspopup", "menu"); btn.setAttribute("aria-expanded", "false"); btn.setAttribute("aria-controls", "user-menu");
+    const item = (iconName, label, onClick, flip) => {
+      const b = el("button", { class: "user-menu-item", type: "button", role: "menuitem" }, icon(iconName, flip), el("span", { text: label }));
+      b.addEventListener("click", () => { closeUserMenu(false); onClick(); });
+      return b;
+    };
+    menu.replaceChildren(
+      el("div", { class: "user-menu-who" }, el("strong", { text: state.user.name }), el("span", { text: T.role[state.user.role] || "" })),
+      item("user", T.account.title, () => { location.hash = "#/account"; }),
+      item("logout", T.account.logout, doLogout, "flip-rtl"));
+  }
+  function openUserMenu() {
+    const btn = $("user-btn"), menu = $("user-menu");
+    menu.hidden = false; btn.setAttribute("aria-expanded", "true");
+    const first = menu.querySelector(".user-menu-item"); if (first) first.focus();
+  }
+  function closeUserMenu(returnFocus) {
+    const btn = $("user-btn"), menu = $("user-menu");
+    if (!btn || !menu || menu.hidden) return;
+    menu.hidden = true; btn.setAttribute("aria-expanded", "false");
+    if (returnFocus) btn.focus();
+  }
+  function bindUserMenu() {
+    const btn = $("user-btn"), menu = $("user-menu");
+    btn.addEventListener("click", () => { if (menu.hidden) openUserMenu(); else closeUserMenu(true); });
+    document.addEventListener("click", (e) => { if (!menu.hidden && !$("appbar-user").contains(e.target)) closeUserMenu(false); });
+    $("appbar-user").addEventListener("keydown", (e) => {
+      if (menu.hidden) return;
+      const items = [...menu.querySelectorAll(".user-menu-item")], i = items.indexOf(document.activeElement);
+      if (e.key === "Escape") { e.preventDefault(); closeUserMenu(true); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === "Tab") closeUserMenu(false);
+    });
   }
   function renderNav() {
     const nav = $("nav");
@@ -604,6 +644,7 @@
   document.addEventListener("DOMContentLoaded", async () => {
     applyStrings();
     wireLogin();
+    bindUserMenu();
     try { state.user = await api("/api/me", { quiet: true }); showApp(); }
     catch (_) { if (!state.user) showLogin(); }
   });

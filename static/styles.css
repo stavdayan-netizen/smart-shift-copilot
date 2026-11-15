@@ -175,7 +175,20 @@ p { margin: 0; }
 .shell { block-size: 100vh; block-size: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "bar" "main" "nav"; }
 .appbar { grid-area: bar; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-block-size: var(--appbar-h);
   padding: 8px 16px; padding-block-start: max(8px, env(safe-area-inset-top)); background: var(--surface); border-block-end: 1px solid var(--line); }
-.appbar-user { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9375rem; min-inline-size: 0; }
+.appbar-user { position: relative; display: flex; align-items: center; color: var(--muted); font-size: .9375rem; min-inline-size: 0; }
+.user-btn { display: flex; align-items: center; gap: 8px; min-block-size: var(--tap); padding-inline: 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; min-inline-size: 0; }
+.user-btn:hover { background: var(--accent-soft); color: var(--accent-text); }
+.user-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.user-btn[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+.user-menu { position: absolute; inset-block-start: calc(100% + 4px); inset-inline-end: 0; z-index: 20; min-inline-size: 13rem; max-inline-size: calc(100vw - 32px); padding: 6px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow); color: var(--ink); }
+.user-menu[hidden] { display: none; }
+.user-menu-who { padding: 8px 10px 10px; border-block-end: 1px solid var(--line); margin-block-end: 6px; display: grid; gap: 2px; }
+.user-menu-who strong { overflow-wrap: anywhere; }
+.user-menu-who span { color: var(--muted); font-size: .875rem; }
+.user-menu-item { display: flex; align-items: center; gap: 10px; inline-size: 100%; min-block-size: var(--tap); padding-inline: 10px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.user-menu-item:hover, .user-menu-item:focus-visible { background: var(--accent-soft); color: var(--accent-text); outline: none; }
+.user-menu-item:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .appbar-user span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-inline-size: 40vw; }
 main { grid-area: main; min-block-size: 0; overflow: auto; overscroll-behavior: contain; }
 main:focus { outline: none; }
