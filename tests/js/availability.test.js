@@ -69,5 +69,28 @@ test("durations split into days, hours and minutes and never go negative", () =>
   eq(M.splitDuration(-5), { days: 0, hours: 0, minutes: 0 });
 });
 
+test("'לא זמין/ה' clears the day, marks it, and a second click only unmarks it (shifts stay cleared)", () => {
+  const start = { "2026-11-29|1": true, "2026-11-29|2": true, "2026-11-30|1": true };
+  const r = M.toggleOff(start, {}, SUN);
+  eq(M.toSlots(r.sel), [{ day: MON, shift_id: 1 }]); eq(r.off, { [SUN]: true }); eq(M.isOff(r.off, SUN), true);
+  eq(start, { "2026-11-29|1": true, "2026-11-29|2": true, "2026-11-30|1": true }, "input must not be mutated");
+  const again = M.toggleOff(r.sel, r.off, SUN);
+  eq(again.off, {}); eq(M.toSlots(again.sel), [{ day: MON, shift_id: 1 }]);
+});
+
+test("'כל המשמרות' resets an unavailable day and selects every shift of it", () => {
+  const off = M.toggleOff({}, {}, SUN);
+  const r = M.selectAllDay(off.sel, off.off, SUN, SHIFTS);
+  eq(r.off, {}); eq(M.toSlots(r.sel), [{ day: SUN, shift_id: 1 }, { day: SUN, shift_id: 2 }]);
+  const other = M.selectAllDay({}, { [MON]: true }, SUN, SHIFTS);
+  eq(other.off, { [MON]: true }, "other days keep their state");
+});
+
+test("on load, days without slots of an existing submission show as unavailable; before a first submission none do", () => {
+  const days = [SUN, MON, "2026-12-01"];
+  eq(M.offFromSlots([{ day: SUN, shift_id: 1 }], days, true), { [MON]: true, "2026-12-01": true });
+  eq(M.offFromSlots([], days, false), {});
+});
+
 console.log((count - failures) + "/" + count + " availability tests passed");
 process.exit(failures ? 1 : 0);

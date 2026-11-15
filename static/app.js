@@ -198,21 +198,20 @@
   }
 
   // ---- employee: the availability form (spec.md section 5)
-  const avail = { data: null, sel: {}, text: "", saved: { sel: {}, text: "" }, skew: 0, timer: null, inputs: {}, busy: false, notice: "", lost: false };
+  const avail = { data: null, sel: {}, off: {}, text: "", saved: { sel: {}, text: "" }, skew: 0, timer: null, inputs: {}, busy: false, notice: "", lost: false };
   const fmtDay = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
   const fmtDate = (iso, year) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
   const fmtWhen = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
+  // "יום שלישי, 24.11.26 בשעה 22:00" (Asia/Jerusalem), built from parts so the order never depends on the browser's pattern
+  const fmtDeadline = (iso) => {
+    const p = {};
+    new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" })
+      .formatToParts(new Date(iso)).forEach((x) => { p[x.type] = x.value; });
+    return `${p.weekday}, ${p.day}.${p.month}.${p.year} ${T.availability.atHour} ${p.hour}:${p.minute}`;
+  };
   const fmtStamp = (iso) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
   const weekRange = (start, end) => fmt(T.availability.week, { start: fmtDate(start), end: fmtDate(end, true) });
 
-  function durationText(seconds) {
-    const d = AM.splitDuration(seconds), A = T.availability, parts = [];
-    if (d.days) parts.push(d.days + " " + (d.days === 1 ? A.day : A.days));
-    if (d.hours) parts.push(d.hours + " " + (d.hours === 1 ? A.hour : A.hours));
-    if (!d.days && d.minutes) parts.push(d.minutes + " " + (d.minutes === 1 ? A.minute : A.minutes));
-    if (!parts.length) return A.lessThanMinute;
-    return parts.length === 1 ? parts[0] : parts.slice(0, -1).join(", ") + " " + A.and + parts[parts.length - 1];
-  }
   function stopAvailabilityTimer() {
     if (avail.timer) { clearInterval(avail.timer); avail.timer = null; }
     window.onbeforeunload = null;
@@ -234,7 +233,7 @@
       avail.skew = Date.parse(data.cycle.now) - Date.now();
       const mine = data.submission;
       avail.saved = { sel: AM.fromSlots(mine ? mine.slots : []), text: mine && mine.free_text ? mine.free_text : "" };
-      if (first || !isDirty() || !data.editable) { avail.sel = AM.fromSlots(mine ? mine.slots : []); avail.text = avail.saved.text; }
+      if (first || !isDirty() || !data.editable) { avail.sel = AM.fromSlots(mine ? mine.slots : []); avail.text = avail.saved.text; avail.off = AM.offFromSlots(mine ? mine.slots : [], data.week.days, !!mine); }
       drawAvailability();
     } catch (e) {
       if (!$("avail-body")) return;
@@ -244,19 +243,12 @@
     }
   }
 
-  function chip(text, kind) { return el("span", { class: "chip chip-" + kind, text }); }
-
   function statusCard(data) {
     const c = data.cycle, A = T.availability;
-    const stateChip = c.state === "open" ? chip(A.stateOpen, "open") : c.state === "closed" ? chip(A.stateClosed, "closed") : chip(A.stateNotOpen, "wait");
-    const mine = data.submission;
-    const subChip = mine ? chip(fmt(A.submissionDone, { when: fmtStamp(mine.updated_at) }), "ok") : chip(A.submissionNone, "wait");
     const card = el("section", { class: "card status-card", "aria-label": A.stateTitle },
-      el("p", { class: "week-range", text: weekRange(data.week.start, data.week.end) }),
-      el("div", { class: "chips" }, stateChip, subChip));
+      el("p", { class: "week-range", text: weekRange(data.week.start, data.week.end) }));
     if (c.state === "open") {
-      card.append(el("p", { text: fmt(A.closesAt, { when: fmtWhen(c.closes_at) }) }), el("p", { class: "countdown", id: "countdown" }));
-      card.append(el("p", { class: "muted", text: A.editUntil }));
+      card.append(el("p", { id: "deadline-line", text: fmt(A.closesAt, { when: fmtDeadline(c.closes_at) }) }));
     } else {
       card.append(el("p", { text: A.openingNotice }), el("p", { class: "muted", text: fmt(A.latestOpen, { when: fmtWhen(c.latest_opens_at) }) }),
         el("p", { class: "muted", text: A.editUntil }));
@@ -288,18 +280,18 @@
     if (!d.shifts.length) body.append(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: A.noShifts })));
     else if (d.editable) body.append(...buildForm(d));
     if (d.locked_week) body.append(lockedCard(d.locked_week));
-    startCountdown();
+    startCloseWatch();
     syncForm();
   }
 
-  function startCountdown() {
+  // No countdown is shown, but the page still notices the deadline passing and reloads the locked state.
+  function startCloseWatch() {
     const c = avail.data.cycle;
-    const node = $("countdown"); if (!node) return;
+    if (c.state !== "open") return;
     const closes = Date.parse(c.closes_at);
     const tick = () => {
       const left = (closes - (Date.now() + avail.skew)) / 1000;
-      if (left <= 0) { stopAvailabilityTimer(); avail.lost = isDirty(); loadAvailability(false); return; }
-      node.textContent = fmt(T.availability.countdown, { duration: durationText(left) });
+      if (left <= 0) { stopAvailabilityTimer(); avail.lost = isDirty(); loadAvailability(false); }
     };
     tick();
     avail.timer = setInterval(tick, 20000);
@@ -312,8 +304,9 @@
       const name = fmtDay(day);
       const all = el("button", { class: "btn", type: "button", "aria-label": fmt(A.allAria, { day: name }) }, el("span", { text: A.all }));
       const none = el("button", { class: "btn", type: "button", "aria-label": fmt(A.noneAria, { day: name }) }, el("span", { text: A.none }));
-      all.addEventListener("click", () => { avail.sel = AM.selectAll(avail.sel, day, d.shifts); syncForm(); });
-      none.addEventListener("click", () => { avail.sel = AM.clearDay(avail.sel, day); syncForm(); });
+      none.setAttribute("aria-pressed", "false"); none.dataset.role = "none"; all.dataset.role = "all";
+      all.addEventListener("click", () => { const r = AM.selectAllDay(avail.sel, avail.off, day, d.shifts); avail.sel = r.sel; avail.off = r.off; syncForm(); });
+      none.addEventListener("click", () => { const r = AM.toggleOff(avail.sel, avail.off, day); avail.sel = r.sel; avail.off = r.off; syncForm(); });
       const count = el("span", { class: "muted day-count", id: "count-" + day });
       const checks = d.shifts.map((sh) => {
         const input = el("input", { type: "checkbox", id: "chk-" + day + "-" + sh.id });
@@ -324,8 +317,7 @@
       days.append(el("fieldset", { class: "day-card", id: "day-" + day },
         el("legend", { class: "sr-only", text: fmt(A.shiftsOf, { day: name }) }),
         el("div", { class: "day-head" }, el("h3", { text: name + ", " + fmtDate(day) }), count),
-        el("div", { class: "checks" }, checks),
-        el("div", { class: "shortcuts" }, all, none)));
+        el("div", { class: "day-body" }, el("div", { class: "checks" }, checks), el("div", { class: "shortcuts" }, all, none))));
     });
     const slotsError = el("div", { class: "notice notice-error", id: "slots-error", role: "alert", hidden: true });
     const daysCard = el("section", { class: "stack" }, el("h2", { text: A.daysTitle }), el("p", { class: "muted", text: A.daysHelp }), slotsError, days);
@@ -341,10 +333,13 @@
       el("div", { class: "notice notice-info", id: "free-notice" }, icon("info"), el("span", { text: A.freeNotice })), textError);
     avail.inputs.text = ta;
 
+    const mine = d.submission;
+    const status = el("p", { class: "submission-status" + (mine ? " done" : ""), id: "submission-status",
+      text: mine ? fmt(A.submissionDone, { when: fmtStamp(mine.updated_at) }) : A.submissionNone });
     const msg = el("p", { class: "save-note", id: "save-note", role: "status" });
     const help = el("p", { class: "muted", id: "save-help" });
     const submit = el("button", { class: "btn btn-primary", type: "submit", id: "btn-save" });
-    const bar = el("div", { class: "submit-bar" }, el("div", { class: "submit-text" }, msg, help), submit);
+    const bar = el("div", { class: "submit-bar" }, el("div", { class: "submit-text" }, status, msg, help), submit);
     const form = el("form", { class: "stack", id: "avail-form", novalidate: true }, daysCard, freeCard, bar,
       el("p", { class: "muted", id: "cannot-work", text: A.cannotWork }));
     form.addEventListener("submit", saveAvailability);
@@ -355,10 +350,15 @@
     if (!$("avail-form")) return;
     const d = avail.data, A = T.availability;
     d.week.days.forEach((day) => {
-      d.shifts.forEach((sh) => { const i = avail.inputs[AM.key(day, sh.id)]; if (i) i.checked = AM.has(avail.sel, day, sh.id); });
+      const off = AM.isOff(avail.off, day);
+      d.shifts.forEach((sh) => { const i = avail.inputs[AM.key(day, sh.id)]; if (i) { i.checked = AM.has(avail.sel, day, sh.id); i.disabled = off; } });
       const n = AM.countDay(avail.sel, day), node = $("count-" + day);
-      if (node) node.textContent = n ? fmt(A.selectedCount, { n }) : A.noneSelected;
-      const card = $("day-" + day); if (card) card.classList.toggle("has-selection", n > 0);
+      if (node) node.textContent = off ? A.none : (n ? fmt(A.selectedCount, { n }) : A.noneSelected);
+      const card = $("day-" + day);
+      if (card) {
+        card.classList.toggle("has-selection", n > 0); card.classList.toggle("is-off", off);
+        const noneBtn = card.querySelector('[data-role="none"]'); if (noneBtn) { noneBtn.setAttribute("aria-pressed", off ? "true" : "false"); noneBtn.classList.toggle("is-active", off); }
+      }
     });
     const len = AM.textLength(avail.text), counter = $("free-count");
     if (counter) { counter.textContent = fmt(A.counter, { n: len.toLocaleString("he-IL"), max: AM.TEXT_MAX.toLocaleString("he-IL") }); counter.classList.toggle("over", len > AM.TEXT_MAX); }
@@ -393,6 +393,7 @@
       avail.data = data; avail.lost = false;
       avail.saved = { sel: AM.fromSlots(data.submission.slots), text: data.submission.free_text || "" };
       avail.sel = AM.fromSlots(data.submission.slots); avail.text = avail.saved.text;
+      avail.off = AM.offFromSlots(data.submission.slots, data.week.days, true);
       avail.notice = fmt(T.availability.saved, { when: fmtWhen(data.cycle.closes_at) });
       avail.busy = false;
       drawAvailability(); announce(avail.notice);

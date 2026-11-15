@@ -360,3 +360,16 @@ def test_manager_user_menu_markup_and_strings():
     assert (s["title"], s["logout"]) == ("החשבון שלי", "התנתקות")
     js = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "bindUserMenu()" in js and "T.role[state.user.role]" in js and 'role === "manager"' not in js.split("function setupUserMenu")[1].split("function openUserMenu")[0]  # both roles get it
+
+
+def test_availability_refinements_copy():
+    a = _strings()["availability"]
+    assert a["closesAt"] == "ההגשה פתוחה עד {when}. אפשר לערוך את ההגשה עד למועד זה."
+    assert a["daysHelp"] == "סמנו את המשמרות שבהן תוכלו לעבוד בכל יום."
+    assert a["freeHelp"] == "למשל: העדפה למשמרות בוקר, מספר משמרות רצוי בשבוע או בקשות אישיות נוספות."
+    for gone in ("stateOpen", "stateNotOpen", "stateClosed", "countdown"):
+        assert gone not in a, gone                       # the top badges and the countdown were removed
+    assert "chip(" not in APP_JS and 'id: "countdown"' not in APP_JS
+    assert "submission-status" in APP_JS and "fmtDeadline" in APP_JS
+    css = (STATIC / "styles.css").read_text(encoding="utf-8")
+    assert "repeat(2, minmax(0, 1fr))" not in css.split(".day-grid")[1].split("}")[0] and ".day-grid { grid-template-columns" not in css.split("@media (min-width: 768px)")[1]

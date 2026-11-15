@@ -32,7 +32,11 @@ spec.loader.exec_module(ui)
 HEADING = "הגשת משמרות לשבוע הבא"
 OPENING = "הגשת המשמרות לשבוע הבא תיפתח לאחר פרסום סידור העבודה לשבוע הקרוב, או ביום חמישי בשעה 22:00 – המוקדם מביניהם"
 FREE_NOTICE = "נשתדל להתחשב בבקשות ככל האפשר, בהתאם לצורכי העסק ולאילוצי השיבוץ, אך אין התחייבות שניתן יהיה להיענות לכולן."
-EDIT_UNTIL = "אפשר להגיש ולערוך את ההגשה עד יום שלישי בשעה 22:00."
+EDIT_UNTIL = "אפשר להגיש ולערוך את ההגשה עד יום שלישי בשעה 22:00."   # shown while the window is not open
+DEADLINE_A = "ההגשה פתוחה עד יום שלישי, 17.11.26 בשעה 22:00. אפשר לערוך את ההגשה עד למועד זה."
+DEADLINE_C = "ההגשה פתוחה עד יום שלישי, 24.11.26 בשעה 22:00. אפשר לערוך את ההגשה עד למועד זה."
+INSTRUCTION = "סמנו את המשמרות שבהן תוכלו לעבוד בכל יום."
+FREE_HELP = "למשל: העדפה למשמרות בוקר, מספר משמרות רצוי בשבוע או בקשות אישיות נוספות."
 
 PROBE = r"""
 (() => {
@@ -51,7 +55,15 @@ PROBE = r"""
     note: txt('#save-note'),
     counter: txt('#free-count'),
     counterOver: !!document.querySelector('.counter.over'),
-    chips: q('.chip').map((c) => c.textContent),
+    chips: q('.chip').length,
+    status: txt('#submission-status'),
+    statusInBar: !!document.querySelector('.submit-bar #submission-status'),
+    firstCardOff: !!document.querySelector('.day-card.is-off'),
+    layout: q('.day-card').map((c) => {
+      const r = c.getBoundingClientRect(), k = c.querySelector('.checks').getBoundingClientRect(), s = c.querySelector('.shortcuts').getBoundingClientRect();
+      return { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), checksTop: Math.round(k.top), checksBottom: Math.round(k.bottom),
+               shortcutsTop: Math.round(s.top), shortcutsLeft: Math.round(s.left), shortcutsRight: Math.round(s.right), checksLeft: Math.round(k.left), checksRight: Math.round(k.right) };
+    }),
     locked: !!document.querySelector('.locked-card'),
     lockedText: txt('.locked-card'),
     hasForm: !!document.getElementById('avail-form'),
@@ -152,7 +164,14 @@ def run(args) -> int:
                 p = probe()
                 expect(p["h1"] == HEADING, f"{vp}/{scheme}: heading is {p['h1']!r}")
                 expect(p["dayCards"] == 7 and p["shortcutButtons"] == 14 and p["checkboxes"] == 14, f"{vp}/{scheme}: form structure {p}")
-                expect(EDIT_UNTIL in p["bodyText"] and FREE_NOTICE in p["bodyText"], f"{vp}/{scheme}: edit-until sentence or free-text notice missing")
+                expect(DEADLINE_A in p["bodyText"] and FREE_NOTICE in p["bodyText"], f"{vp}/{scheme}: the one-line deadline notice or the free-text notice is missing")
+                expect(EDIT_UNTIL not in p["bodyText"] and "נותר" not in p["bodyText"], f"{vp}/{scheme}: the old edit-until line or a countdown is still shown")
+                expect(INSTRUCTION in p["bodyText"] and FREE_HELP in p["bodyText"], f"{vp}/{scheme}: instruction or free-text example is wrong")
+                expect(p["chips"] == 0, f"{vp}/{scheme}: status badges are still shown")
+                expect(p["statusInBar"] and p["status"] == "טרם הוגשה", f"{vp}/{scheme}: submission status next to the submit button is {p['status']!r}")
+                lay = p["layout"]
+                expect(len(lay) == 7 and all(lay[i]["top"] < lay[i + 1]["top"] and lay[i]["left"] == lay[0]["left"] and lay[i]["width"] == lay[0]["width"] for i in range(6)), f"{vp}/{scheme}: day cards are not stacked one per row")
+                expect(all(c["shortcutsTop"] < c["checksBottom"] and (c["shortcutsRight"] <= c["checksLeft"] or c["shortcutsLeft"] >= c["checksRight"]) for c in lay), f"{vp}/{scheme}: 'כל המשמרות' / 'לא זמין/ה' are not beside the shift choices")
                 expect(p["saveDisabled"] is True and "לפחות משמרת אחת" in p["help"], f"{vp}/{scheme}: empty form must not be submittable")
                 record(vp, scheme, "form-empty", note="open window, nothing selected, submit disabled", expected=("/api/me",))
                 if full:
@@ -160,7 +179,18 @@ def run(args) -> int:
                     day_button(0, 0)
                     expect(probe()["checked"] == 2, f"{vp}: 'כל המשמרות' did not tick both shifts")
                     day_button(0, 1)
-                    expect(probe()["checked"] == 0, f"{vp}: 'לא זמין/ה' did not clear the day")
+                    st = js("(() => { const c = document.querySelectorAll('.day-card')[0]; const n = c.querySelector('[data-role=none]'); return {checked: c.querySelectorAll('.check input:checked').length, disabled: [...c.querySelectorAll('.check input')].every((i) => i.disabled), pressed: n.getAttribute('aria-pressed'), active: n.classList.contains('is-active')}; })()")
+                    expect(probe()["checked"] == 0 and st["checked"] == 0 and st["disabled"] and st["pressed"] == "true" and st["active"], f"{vp}: 'לא זמין/ה' must clear, disable and show an active state: {st}")
+                    record(vp, scheme, "day-unavailable", note="'לא זמין/ה' active on the first day: shifts cleared and disabled")
+                    day_button(0, 1)
+                    st = js("(() => { const c = document.querySelectorAll('.day-card')[0]; const n = c.querySelector('[data-role=none]'); return {disabled: [...c.querySelectorAll('.check input')].some((i) => i.disabled), pressed: n.getAttribute('aria-pressed')}; })()")
+                    expect(not st["disabled"] and st["pressed"] == "false", f"{vp}: a second click on 'לא זמין/ה' must switch it off and re-enable the shifts: {st}")
+                    day_button(0, 1)
+                    day_button(0, 0)
+                    st = js("(() => { const c = document.querySelectorAll('.day-card')[0]; return {checked: c.querySelectorAll('.check input:checked').length, off: c.classList.contains('is-off')}; })()")
+                    expect(st["checked"] == 2 and not st["off"], f"{vp}: 'כל המשמרות' must reset the unavailable state and select both shifts: {st}")
+                    day_button(0, 1)
+                    day_button(0, 1)
                     click(".day-card .check input", 0)
                     p = probe()
                     expect(p["checked"] == 1 and "1" in p["firstDayCount"], f"{vp}: single checkbox not reflected: {p['firstDayCount']!r}")
@@ -184,12 +214,12 @@ def run(args) -> int:
                     click("#btn-save")
                     settle(1.5)
                     p = probe()
-                    expect("נשמרה" in p["note"] and any("הוגשה" in c for c in p["chips"]), f"{vp}: save not confirmed: {p['note']!r} {p['chips']}")
+                    expect("נשמרה" in p["note"] and p["status"].startswith("הוגשה"), f"{vp}: save not confirmed: {p['note']!r} {p['status']!r}")
                     record(vp, scheme, "form-saved", note="saved confirmation")
                     # reload keeps it; editing then saving updates it
                     fresh(args.a, w, h, mobile, scheme, clear=False)
                     p = probe()
-                    expect(p["checked"] == 5 and any("הוגשה" in c for c in p["chips"]), f"{vp}: saved submission not shown after reload: {p['checked']}")
+                    expect(p["checked"] == 5 and p["status"].startswith("הוגשה") and p["firstCardOff"], f"{vp}: saved submission not shown after reload (a saved day without shifts shows as unavailable): {p['checked']} {p['status']!r}")
                     day_button(4, 1)
                     expect("שלא נשמרו" in probe()["help"], f"{vp}: unsaved changes not indicated")
                     click("#btn-save")
@@ -211,6 +241,7 @@ def run(args) -> int:
                 fresh(args.c, w, h, mobile, scheme, clear=False)
                 p = probe()
                 expect(p["hasForm"] and p["locked"] and p["saveDisabled"], f"{vp}/{scheme}: open form with locked summary expected")
+                expect(DEADLINE_C in p["bodyText"], f"{vp}/{scheme}: the deadline line for the next week is wrong")
                 record(vp, scheme, "open-next-week-with-locked", note="new week form, previous week locked below")
                 b.call("Network.clearBrowserCookies")
         results["failures"] = failures
