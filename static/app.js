@@ -131,14 +131,10 @@
     renderNav();
     route();
   }
-  // The top-corner user menu (managers): who is signed in, my account, sign out. Employees keep the plain name.
+  // The top-corner user menu (both roles): who is signed in, my account, sign out.
   function setupUserMenu() {
     const btn = $("user-btn"), menu = $("user-menu");
-    const enabled = state.user.role === "manager";
     closeUserMenu(false);
-    btn.dataset.static = enabled ? "false" : "true";
-    btn.disabled = !enabled;
-    if (!enabled) { btn.removeAttribute("aria-haspopup"); btn.removeAttribute("aria-expanded"); menu.replaceChildren(); return; }
     btn.setAttribute("aria-haspopup", "menu"); btn.setAttribute("aria-expanded", "false"); btn.setAttribute("aria-controls", "user-menu");
     const item = (iconName, label, onClick, flip) => {
       const b = el("button", { class: "user-menu-item", type: "button", role: "menuitem" }, icon(iconName, flip), el("span", { text: label }));

@@ -359,4 +359,4 @@ def test_manager_user_menu_markup_and_strings():
     s = _strings()["account"]
     assert (s["title"], s["logout"]) == ("החשבון שלי", "התנתקות")
     js = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert 'role === "manager"' in js and "bindUserMenu()" in js and "T.role[state.user.role]" in js
+    assert "bindUserMenu()" in js and "T.role[state.user.role]" in js and 'role === "manager"' not in js.split("function setupUserMenu")[1].split("function openUserMenu")[0]  # both roles get it

@@ -180,8 +180,6 @@ p { margin: 0; }
 .user-btn:hover { background: var(--accent-soft); color: var(--accent-text); }
 .user-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .user-btn[aria-expanded="true"] .chevron { transform: rotate(180deg); }
-.user-btn[data-static="true"] { cursor: default; pointer-events: none; }
-.user-btn[data-static="true"] .chevron { display: none; }
 .user-menu { position: absolute; inset-block-start: calc(100% + 4px); inset-inline-end: 0; z-index: 20; min-inline-size: 13rem; max-inline-size: calc(100vw - 32px); padding: 6px;
   background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow); color: var(--ink); }
 .user-menu[hidden] { display: none; }

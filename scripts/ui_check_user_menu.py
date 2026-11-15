@@ -6,7 +6,7 @@
 Per viewport (360, 390, 768, 1280) and colour scheme it checks: the login field label is "סיסמה" and the manager hint is
 gone; the manager's top-corner name opens a menu with the name, the role, "החשבון שלי" and "התנתקות"; the menu stays inside
 the viewport and its items are at least 44 px; Escape and an outside click close it and Escape returns focus; the account
-item navigates and closes; the logout item signs out; for an employee the name is plain text with no menu.
+item navigates and closes; the logout item signs out; the employee gets the same menu (name, role "עובד/ת", account, sign out); the login intro is the new sentence.
 Reuses the browser driver of scripts/ui_check.py. Use only against a local or test instance with fictional data.
 """
 from __future__ import annotations
@@ -134,12 +134,25 @@ def main() -> int:
                 b.js("document.querySelectorAll('.user-menu-item')[1].click()", False)
                 settle(1.0)
                 check(b.js("document.getElementById('view-login').hidden === false"), f"{tag}: logout item did not return to the login screen")
-                # employee: plain name, no menu
+                # employee: the same menu, with the employee's name and role
                 login(args.employee_name, args.employee_code)
-                e = b.js("(() => { const b = document.getElementById('user-btn'); return {disabled: b.disabled, menuEmpty: document.getElementById('user-menu').children.length === 0, hidden: document.getElementById('user-menu').hidden, name: document.getElementById('appbar-name').textContent}; })()")
-                check(e["disabled"] and e["menuEmpty"] and e["hidden"], f"{tag}: employee should have no menu: {e}")
-                check(e["name"] == args.employee_name, f"{tag}: employee name shown {e['name']!r}")
-                b.shot(out / f"{vp}-{scheme}-employee.jpg")
+                click("#user-btn")
+                p = b.js(MENU_PROBE)
+                check(not p["hidden"] and p["itemLabels"] == ["החשבון שלי", "התנתקות"], f"{tag}: employee menu items {p['itemLabels']}")
+                check(args.employee_name in p["who"] and "עובד/ת" in p["who"], f"{tag}: employee who block is {p['who']!r}")
+                check(p["insideViewport"] and all(x >= 44 for x in p["itemHeights"]), f"{tag}: employee menu geometry {p['left']}..{p['right']}/{p['vw']} {p['itemHeights']}")
+                b.shot(out / f"{vp}-{scheme}-employee-menu-open.jpg")
+                key("Escape")
+                click("#user-btn")
+                b.js("document.querySelectorAll('.user-menu-item')[0].click()", False)
+                settle(0.6)
+                check(b.js(MENU_PROBE)["hash"] == "#/account", f"{tag}: employee account item did not navigate")
+                click("#user-btn")
+                b.js("document.querySelectorAll('.user-menu-item')[1].click()", False)
+                settle(1.0)
+                check(b.js("document.getElementById('view-login').hidden === false"), f"{tag}: employee logout item did not return to login")
+                intro = b.js("(document.querySelector('#view-login p') || {}).textContent || ''")
+                check("הזינו את שם המשתמש והסיסמה שלכם כדי להיכנס למערכת." in b.js("document.getElementById('view-login').innerText"), f"{tag}: login intro text is wrong")
                 errs = list(b.console)
                 b.console.clear()
                 check(not [x for x in errs if "401" not in x], f"{tag}: console errors {errs[:2]}")
