@@ -233,3 +233,14 @@ def test_the_fake_model_is_free_and_silent(caplog):
 def test_the_prompt_uses_the_scheduling_clock_for_today(db):
     text = agent.build_system(db)[0]["text"]
     assert "Today is 2026-11-22" in text   # frozen_open fixture, not the real date
+
+
+def test_tool_dates_carry_hebrew_weekday_names(db, world):
+    r = shift_tools.get_submission_status(db, {"week_start": "2026-11-29"})
+    assert r["closes_at_he"].startswith("יום שלישי, 24.11.2026 22:00")          # Tuesday, the day Haiku got wrong
+    assert r["opens_at_he"].startswith("יום חמישי, 19.11.2026 22:00")
+    assert (r["week_start_weekday"], r["week_end_weekday"]) == ("יום ראשון", "יום שבת")
+    a = shift_tools.get_availability(db, {"employee": world.names["Dana"], "week_start": "2026-11-29"})
+    assert [d["weekday"] for d in a["days"]] == ["יום ראשון", "יום שני"]
+    assert [shift_tools.weekday_he(date(2026, 11, 22) + timedelta(days=i)) for i in range(7)] == [
+        "יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת"]
