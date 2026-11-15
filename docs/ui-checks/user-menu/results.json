@@ -1,0 +1,191 @@
+{
+ "browser": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+ "base": "http://localhost:8000",
+ "results": [
+  {
+   "viewport": "360",
+   "scheme": "light",
+   "hidden": false,
+   "expanded": "true",
+   "left": 16,
+   "right": 224,
+   "vw": 360,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "360",
+   "scheme": "dark",
+   "hidden": false,
+   "expanded": "true",
+   "left": 16,
+   "right": 224,
+   "vw": 360,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "390",
+   "scheme": "light",
+   "hidden": false,
+   "expanded": "true",
+   "left": 16,
+   "right": 224,
+   "vw": 390,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "390",
+   "scheme": "dark",
+   "hidden": false,
+   "expanded": "true",
+   "left": 16,
+   "right": 224,
+   "vw": 390,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "768",
+   "scheme": "light",
+   "hidden": false,
+   "expanded": "true",
+   "left": 24,
+   "right": 232,
+   "vw": 768,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "768",
+   "scheme": "dark",
+   "hidden": false,
+   "expanded": "true",
+   "left": 24,
+   "right": 232,
+   "vw": 768,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "1280",
+   "scheme": "light",
+   "hidden": false,
+   "expanded": "true",
+   "left": 24,
+   "right": 232,
+   "vw": 1280,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  },
+  {
+   "viewport": "1280",
+   "scheme": "dark",
+   "hidden": false,
+   "expanded": "true",
+   "left": 24,
+   "right": 232,
+   "vw": 1280,
+   "insideViewport": true,
+   "itemLabels": [
+    "החשבון שלי",
+    "התנתקות"
+   ],
+   "itemHeights": [
+    44,
+    44
+   ],
+   "who": "manager\nמנהל/ת",
+   "focusInMenu": true,
+   "focusOnButton": false,
+   "hash": "#/assistant",
+   "btnHeight": 44
+  }
+ ],
+ "failures": []
+}

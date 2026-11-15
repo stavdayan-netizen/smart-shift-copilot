@@ -345,3 +345,18 @@ def test_the_form_has_no_manual_opening_or_change_request_button():
     forbidden = ("changeRequest", "change-request", "openSubmissions", "בקשת שינוי")
     assert not any(f in APP_JS for f in forbidden)
     assert "המשמרות שלי" not in STRINGS_JS     # employees see only their form and lock summary until schedules exist
+
+
+def test_login_label_is_password_and_the_manager_hint_is_gone():
+    s = _strings()
+    assert s["login"]["code"] == "סיסמה" and "codeHint" not in s["login"]
+    assert "למנהל/ת: כאן מזינים את הסיסמה" not in STRINGS_JS + HTML
+    assert "login-code-hint" not in HTML
+
+
+def test_manager_user_menu_markup_and_strings():
+    assert re.search(r'<button[^>]+id="user-btn"', HTML) and 'id="user-menu"' in HTML and 'role="menu"' in HTML
+    s = _strings()["account"]
+    assert (s["title"], s["logout"]) == ("החשבון שלי", "התנתקות")
+    js = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert 'role === "manager"' in js and "bindUserMenu()" in js and "T.role[state.user.role]" in js
