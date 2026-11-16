@@ -16,6 +16,19 @@ Dashboard route; nothing here has been run. The web service plus PostgreSQL is a
 
 The form is only open between Thursday 22:00 and Tuesday 22:00 Asia/Jerusalem; outside it the form shows a Hebrew notice. Fictional data only; the security gates #8, #15, #24 remain open.
 
+## First deployment: what actually happened (2026-11-15)
+
+Done with the Railway CLI v5.74 on the Trial plan (one-time $5 credit; the Usage page and `railway usage limit` offer no spending limit on Trial, so the effective hard limit is the credit itself, plus `DAILY_CAP_USD` for the model). Project `smart-shift-copilot`, services `web` (GitHub repo, branch `main`) and `Postgres`; no digest service. Live URL: https://web-production-8700649a.up.railway.app (`/health` returned `status: ok`, `db: postgres`).
+
+Lessons, so the next deployment is shorter:
+- `railway environment edit --service-config` reported "No changes to apply" for the start command and health check. What worked: GraphQL `serviceInstanceUpdate(startCommand, healthcheckPath, healthcheckTimeout)` through `railway api --file query.graphql --variables @vars.json` (quote problems make inline queries fail in PowerShell). The dashboard (Settings > Deploy) does the same. Without a start command Railpack cannot start the app and the first build fails.
+- Variables: `railway variable set KEY=VALUE --service web [--skip-deploys]`. **Do not pipe a secret with `--stdin` from PowerShell**: the trailing newline became part of `MANAGER_PASSWORD` and every login returned 401. Pass `KEY=VALUE` as an argument instead.
+- Production refuses to start without `ANTHROPIC_API_KEY` unless `MODEL_PROVIDER=fake`. The deployment started with `MODEL_PROVIDER=fake` (no paid calls possible). On 2026-11-16, after the owner approved it and set the key in Railway, `MODEL_PROVIDER` was removed, `MODEL=claude-sonnet-5-5`, `MODEL_EFFORT=medium` and `DAILY_CAP_USD=0.25` were set, and two live tool-backed Copilot questions cost $0.0122 in total.
+- `railway ssh -- <command>` hung on Windows (no output after 80 s). Plain OpenSSH works: register a dedicated key (`railway ssh keys add`), take the host and user from `railway ssh config -s web -i <key> --dry-run`, then `ssh -i <key> -o IdentitiesOnly=yes <user>@ssh.railway.com "python -m app.seed --confirm-fictional"`. Save the printed codes to a file outside the repository instead of the terminal.
+- Postgres on Railway is currently version 18 (CI tests 16); migrations 0001-0004 ran cleanly on it.
+- The scheduling clock is the real one in production (`CLOCK_OVERRIDE` is refused), so the form is only open between the weekly opening (Thursday 22:00 or first publication) and Tuesday 22:00 Asia/Jerusalem.
+- Still open: no HSTS/CSP headers (issue #15), no per-IP login throttle (`CLIENT_IP_HEADER` not verified), issue #24.
+
 ## Philosophy (from the instructor)
 Plan first · test locally · CI as quality gate · secrets only in Variables · Postgres with persistent volume and backups · health check · documented rollback · watch cost and failures.
 
