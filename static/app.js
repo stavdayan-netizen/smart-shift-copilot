@@ -203,11 +203,20 @@
   const fmtDate = (iso, year) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
   const fmtWhen = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
   // "יום שלישי, 24.11.26 בשעה 22:00" (Asia/Jerusalem), built from parts so the order never depends on the browser's pattern
-  const fmtDeadline = (iso) => {
+  const deadlineParts = (iso) => {
     const p = {};
     new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" })
       .formatToParts(new Date(iso)).forEach((x) => { p[x.type] = x.value; });
+    return p;
+  };
+  const fmtDeadline = (iso) => {
+    const p = deadlineParts(iso);
     return `${p.weekday}, ${p.day}.${p.month}.${p.year} ${T.availability.atHour} ${p.hour}:${p.minute}`;
+  };
+  // the manager notice reads "יום שלישי, 24.11.26, בשעה 22:00" (with a comma after the date)
+  const fmtDeadlineComma = (iso) => {
+    const p = deadlineParts(iso);
+    return `${p.weekday}, ${p.day}.${p.month}.${p.year}, ${T.availability.atHour} ${p.hour}:${p.minute}`;
   };
   const fmtStamp = (iso) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
   const weekRange = (start, end) => fmt(T.availability.week, { start: fmtDate(start), end: fmtDate(end, true) });
@@ -475,15 +484,16 @@
     const tiles = el("div", { class: "stat-grid", role: "group", "aria-label": S.counts },
       stat(S.total, c.total, "total"), stat(S.submitted, c.submitted, "ok"), stat(S.missing, c.missing, "missing"));
     if (c.exempt > 0) tiles.append(stat(S.exempt, c.exempt, "leave"));
-    const when = fmtDeadline(cy.closes_at);
+    // The notice uses the closing time of the SAME window the report shows (the server picks the week and its window together).
+    const notice = el("div", { class: "notice notice-info", id: "subs-notice", role: "note" }, icon("info"),
+      el("span", { text: fmt(cy.state === "closed" ? S.noticeClosed : S.noticeOpen, { when: fmtDeadlineComma(cy.closes_at) }) }));
     const head = el("section", { class: "card status-card" },
       el("p", { class: "week-range", text: fmt(S.week, { start: fmtDate(d.week.start), end: fmtDate(d.week.end, true) }) }),
-      el("p", { text: fmt(cy.state === "closed" ? S.closed : S.open, { when }) }),
       el("p", { class: "muted", text: S.readOnly }));
     const list = d.employees.length
       ? el("section", { class: "emp-list", "aria-label": S.list }, d.employees.map(employeeCard))
       : el("p", { class: "muted", text: S.empty });
-    body.replaceChildren(head, tiles, list);
+    body.replaceChildren(notice, head, tiles, list);
   }
 
   // ---- account (both roles)

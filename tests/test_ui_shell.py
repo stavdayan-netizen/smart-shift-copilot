@@ -385,3 +385,13 @@ def test_submissions_tab_is_manager_only_read_only_and_uses_safe_rendering():
     assert "leave_dates" in body and "full_week_leave" in body                                                         # leave shows when the API sends it
     dest = APP_JS.split("const DESTINATIONS")[1].split("};")[0]
     assert 'id: "submissions"' in dest.split("employee:")[0] and 'id: "submissions"' not in dest.split("employee:")[1]
+
+
+def test_submissions_notice_copy_and_placement():
+    s = _strings()["submissions"]
+    assert s["noticeOpen"] == "שימו לב: העובדים יכולים להגיש ולעדכן את זמינותם עד {when}. עד אז ההגשות המוצגות עשויות להשתנות."
+    assert s["noticeClosed"] == "ההגשה לשבוע זה נסגרה ב{when}."
+    code = _strip_js_comments(APP_JS)
+    body = code.split("function drawSubmissions")[1].split("function renderAccount")[0]
+    assert "body.replaceChildren(notice, head, tiles, list)" in body                    # below the heading, above the counts
+    assert "cy.closes_at" in body and "d.cycle" in body                                  # the deadline of the displayed report's own window

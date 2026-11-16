@@ -34,6 +34,10 @@ PROBE = r"""
     cards: cards.length, open: cards.filter((c) => c.open).length,
     statuses: cards.map((c) => c.dataset.status),
     summaryHeights: q('.emp-summary').map((s) => Math.round(s.getBoundingClientRect().height)),
+    noticeText: (document.getElementById('subs-notice') || {}).innerText || '',
+    noticeTop: Math.round((document.getElementById('subs-notice') || document.body).getBoundingClientRect().top),
+    h1Bottom: Math.round((document.querySelector('#main h1') || document.body).getBoundingClientRect().bottom),
+    tilesTop: Math.round((document.querySelector('.stat-grid') || document.body).getBoundingClientRect().top),
     badges: q('.badge').map((b) => b.textContent),
     detailText: cards.filter((c) => c.open).map((c) => c.querySelector('.emp-detail').innerText).join('\n'),
     htmlInFreeText: !!document.querySelector('.emp-detail .free-text b, .emp-detail .free-text script, .emp-detail .free-text img'),
@@ -52,6 +56,7 @@ def main() -> int:
     ap.add_argument("--employee-name", required=True)
     ap.add_argument("--employee-code", required=True)
     ap.add_argument("--expect-leave", action="store_true")
+    ap.add_argument("--expect-notice", help="the exact notice text expected under the heading (depends on the instance clock)")
     args = ap.parse_args()
     exe = args.browser or next((p for p in ui.BROWSERS if Path(p).exists()), None) or shutil.which("chrome") or shutil.which("msedge")
     if not exe:
@@ -92,6 +97,9 @@ def main() -> int:
                 p = b.js(PROBE)
                 checks.append({"vp": vp, "scheme": scheme, **{k: p[k] for k in ("cards", "tiles", "statuses", "badges")}})
                 check(p["h1"] == "הגשות עובדים", f"{tag}: heading is {p['h1']!r}")
+                if args.expect_notice:
+                    check(p["noticeText"].strip() == args.expect_notice, f"{tag}: notice is {p['noticeText']!r}")
+                check(p["h1Bottom"] <= p["noticeTop"] < p["tilesTop"], f"{tag}: the notice must sit below the heading and above the counts ({p['h1Bottom']}, {p['noticeTop']}, {p['tilesTop']})")
                 tiles = dict(p["tiles"])
                 total, sub, miss = tiles.get("סה״כ עובדים"), tiles.get("הגישו"), tiles.get("טרם הגישו")
                 exempt = tiles.get("פטורים מהגשה", 0)
