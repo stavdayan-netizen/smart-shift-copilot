@@ -33,7 +33,8 @@ window.T = {
     "label": "ניווט ראשי",
     "assistant": "העוזר החכם",
     "account": "החשבון שלי",
-    "availability": "הגשת משמרות"
+    "availability": "הגשת משמרות",
+    "submissions": "הגשות עובדים"
   },
   "role": {
     "manager": "מנהל/ת",
@@ -58,6 +59,35 @@ window.T = {
     "errorPrefix": "שגיאה",
     "tooLong": "ההודעה ארוכה מדי.",
     "tableLabel": "טבלה"
+  },
+  "submissions": {
+    "title": "הגשות עובדים",
+    "week": "השבוע: {start} – {end}",
+    "noticeOpen": "שימו לב: העובדים יכולים להגיש ולעדכן את זמינותם עד {when}. עד אז ההגשות המוצגות עשויות להשתנות.",
+    "noticeClosed": "ההגשה לשבוע זה נסגרה ב{when}.",
+    "counts": "סיכום הגשות",
+    "total": "סה״כ עובדים",
+    "submitted": "הגישו",
+    "missing": "טרם הגישו",
+    "exempt": "פטורים מהגשה",
+    "list": "הגשות לפי עובד",
+    "statusSubmitted": "הוגשה",
+    "statusMissing": "טרם הוגשה",
+    "statusExempt": "פטור/ה מהגשה",
+    "leavePartial": "חופשה מאושרת: {dates}",
+    "leaveFull": "חופשה מאושרת לכל השבוע",
+    "updated": "עודכנה {when}",
+    "shiftsTitle": "משמרות שהוגשו",
+    "noShifts": "לא הוגשו משמרות.",
+    "noShiftsExempt": "לא הוגשו משמרות: העובד/ת בחופשה מאושרת לכל השבוע.",
+    "freeTitle": "בקשות והעדפות",
+    "noFree": "לא נכתבו בקשות או העדפות.",
+    "empty": "עדיין אין עובדים במערכת.",
+    "refresh": "רענון",
+    "refreshing": "מרענן…",
+    "loadFailed": "לא הצלחנו לטעון את ההגשות.",
+    "retry": "ניסיון חוזר",
+    "readOnly": "תצוגה לקריאה בלבד."
   },
   "history": {
     "title": "שיחות קודמות",

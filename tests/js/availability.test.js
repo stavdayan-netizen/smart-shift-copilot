@@ -92,5 +92,12 @@ test("on load, days without slots of an existing submission show as unavailable;
   eq(M.offFromSlots([], days, false), {});
 });
 
+test("approved leave dates are grouped into consecutive ranges", () => {
+  eq(M.groupDates(["2026-12-02", "2026-12-01", "2026-12-04"]), [{ start: "2026-12-01", end: "2026-12-02" }, { start: "2026-12-04", end: "2026-12-04" }]);
+  eq(M.groupDates(["2026-11-30", "2026-12-01"]), [{ start: "2026-11-30", end: "2026-12-01" }], "across a month boundary");
+  eq(M.groupDates(["2026-12-01", "2026-12-01"]), [{ start: "2026-12-01", end: "2026-12-01" }]);
+  eq(M.groupDates([]), []); eq(M.groupDates(null), []);
+});
+
 console.log((count - failures) + "/" + count + " availability tests passed");
 process.exit(failures ? 1 : 0);

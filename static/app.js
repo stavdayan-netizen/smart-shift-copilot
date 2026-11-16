@@ -119,7 +119,7 @@
   }
 
   const DESTINATIONS = {
-    manager: [{ id: "assistant", label: "nav.assistant", icon: "sparkle" }, { id: "account", label: "nav.account", icon: "user" }],
+    manager: [{ id: "assistant", label: "nav.assistant", icon: "sparkle" }, { id: "submissions", label: "nav.submissions", icon: "calendar" }, { id: "account", label: "nav.account", icon: "user" }],
     employee: [{ id: "availability", label: "nav.availability", icon: "calendar" }, { id: "account", label: "nav.account", icon: "user" }],
   };
   const destinations = () => DESTINATIONS[state.user.role] || DESTINATIONS.employee;
@@ -190,7 +190,7 @@
     stopAvailabilityTimer();
     const main = $("main");
     main.replaceChildren();
-    ({ assistant: renderAssistant, availability: renderAvailability, account: renderAccount })[id](main);
+    ({ assistant: renderAssistant, submissions: renderSubmissions, availability: renderAvailability, account: renderAccount })[id](main);
     const h1 = main.querySelector("h1");
     if (h1) { h1.setAttribute("tabindex", "-1"); h1.focus({ preventScroll: true }); }
     document.title = get("nav." + (id === "assistant" ? "assistant" : id)) + " · " + T.app.name;
@@ -203,11 +203,20 @@
   const fmtDate = (iso, year) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
   const fmtWhen = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
   // "יום שלישי, 24.11.26 בשעה 22:00" (Asia/Jerusalem), built from parts so the order never depends on the browser's pattern
-  const fmtDeadline = (iso) => {
+  const deadlineParts = (iso) => {
     const p = {};
     new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" })
       .formatToParts(new Date(iso)).forEach((x) => { p[x.type] = x.value; });
+    return p;
+  };
+  const fmtDeadline = (iso) => {
+    const p = deadlineParts(iso);
     return `${p.weekday}, ${p.day}.${p.month}.${p.year} ${T.availability.atHour} ${p.hour}:${p.minute}`;
+  };
+  // the manager notice reads "יום שלישי, 24.11.26, בשעה 22:00" (with a comma after the date)
+  const fmtDeadlineComma = (iso) => {
+    const p = deadlineParts(iso);
+    return `${p.weekday}, ${p.day}.${p.month}.${p.year}, ${T.availability.atHour} ${p.hour}:${p.minute}`;
   };
   const fmtStamp = (iso) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
   const weekRange = (start, end) => fmt(T.availability.week, { start: fmtDate(start), end: fmtDate(end, true) });
@@ -405,6 +414,86 @@
       else if (err.status === 409) { await loadAvailability(false); avail.notice = ""; const b = $("avail-body"); if (b) b.prepend(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: err.message }))); }
       else { avail.notice = ""; syncForm(); showFieldError("slots-error", err.message); }
     }
+  }
+
+  // ---- manager: read-only report of the target week's submissions ("הגשות עובדים"); the server allows managers only
+  const dateRange = (r) => {
+    if (r.start === r.end) return fmtDate(r.start);
+    const a = new Date(r.start + "T00:00:00Z"), b = new Date(r.end + "T00:00:00Z");
+    if (a.getUTCMonth() === b.getUTCMonth()) return a.getUTCDate() + "–" + fmtDate(r.end);
+    return fmtDate(r.start) + " – " + fmtDate(r.end);
+  };
+  const leaveText = (dates) => AM.groupDates(dates).map(dateRange).join(", ");
+
+  function renderSubmissions(main) {
+    const S = T.submissions;
+    const body = el("div", { class: "stack", id: "subs-body" }, el("p", { class: "muted", text: T.status.loading }));
+    const refresh = el("button", { class: "btn", type: "button", id: "subs-refresh" }, el("span", { text: S.refresh }));
+    refresh.addEventListener("click", () => loadSubmissions(true));
+    main.append(el("div", { class: "screen" }, el("div", { class: "screen-head" }, el("h1", { text: S.title }), refresh), body));
+    loadSubmissions(false);
+  }
+
+  async function loadSubmissions(manual) {
+    const S = T.submissions, body = $("subs-body"), btn = $("subs-refresh");
+    if (!body) return;
+    if (btn) { btn.disabled = true; btn.querySelector("span").textContent = S.refreshing; }
+    try {
+      const data = await api("/api/submissions");
+      if (!$("subs-body")) return;
+      drawSubmissions(data);
+      if (manual) announce(S.title);
+    } catch (e) {
+      if (!$("subs-body")) return;
+      const retry = el("button", { class: "btn", type: "button", text: S.retry });
+      retry.addEventListener("click", () => loadSubmissions(true));
+      $("subs-body").replaceChildren(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: e.message || S.loadFailed })), retry);
+    } finally {
+      const b = $("subs-refresh"); if (b) { b.disabled = false; b.querySelector("span").textContent = S.refresh; }
+    }
+  }
+
+  function badge(text, kind) { return el("span", { class: "badge badge-" + kind, text }); }
+
+  function employeeCard(e) {
+    const S = T.submissions;
+    const badges = el("span", { class: "badges" });
+    badges.append(e.status === "submitted" ? badge(S.statusSubmitted, "ok") : e.status === "exempt" ? badge(S.statusExempt, "leave") : badge(S.statusMissing, "missing"));
+    if (e.full_week_leave) badges.append(badge(S.leaveFull, "leave"));
+    else if (e.leave_dates.length) badges.append(badge(fmt(S.leavePartial, { dates: leaveText(e.leave_dates) }), "leave"));
+    const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-name", text: e.name, dir: "auto" }), badges, el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
+    const detail = el("div", { class: "emp-detail" });
+    if (e.updated_at) detail.append(el("p", { class: "muted", text: fmt(S.updated, { when: fmtStamp(e.updated_at) }) }));
+    detail.append(el("h3", { text: S.shiftsTitle }));
+    if (e.days.length) {
+      detail.append(el("ul", { class: "emp-days" }, e.days.map((d) => el("li", {},
+        el("strong", { text: fmtDay(d.date) + ", " + fmtDate(d.date) }),
+        el("span", { class: "emp-shifts" }, d.shifts.map((s) => el("span", { class: "emp-shift" }, el("span", { text: s.name }), " ", el("span", { class: "ltr", text: s.start_time + "–" + s.end_time }))))))));
+    } else {
+      detail.append(el("p", { class: "muted", text: e.status === "exempt" ? S.noShiftsExempt : S.noShifts }));
+    }
+    detail.append(el("h3", { text: S.freeTitle }));
+    detail.append(e.free_text ? el("p", { class: "free-text", dir: "auto", text: e.free_text }) : el("p", { class: "muted", text: S.noFree }));
+    return el("details", { class: "emp-card", "data-status": e.status }, summary, detail);
+  }
+
+  function drawSubmissions(d) {
+    const S = T.submissions, body = $("subs-body");
+    const c = d.counts, cy = d.cycle;
+    const stat = (label, n, kind) => el("div", { class: "stat stat-" + kind }, el("span", { class: "stat-n", text: String(n) }), el("span", { class: "stat-l", text: label }));
+    const tiles = el("div", { class: "stat-grid", role: "group", "aria-label": S.counts },
+      stat(S.total, c.total, "total"), stat(S.submitted, c.submitted, "ok"), stat(S.missing, c.missing, "missing"));
+    if (c.exempt > 0) tiles.append(stat(S.exempt, c.exempt, "leave"));
+    // The notice uses the closing time of the SAME window the report shows (the server picks the week and its window together).
+    const notice = el("div", { class: "notice notice-info", id: "subs-notice", role: "note" }, icon("info"),
+      el("span", { text: fmt(cy.state === "closed" ? S.noticeClosed : S.noticeOpen, { when: fmtDeadlineComma(cy.closes_at) }) }));
+    const head = el("section", { class: "card status-card" },
+      el("p", { class: "week-range", text: fmt(S.week, { start: fmtDate(d.week.start), end: fmtDate(d.week.end, true) }) }),
+      el("p", { class: "muted", text: S.readOnly }));
+    const list = d.employees.length
+      ? el("section", { class: "emp-list", "aria-label": S.list }, d.employees.map(employeeCard))
+      : el("p", { class: "muted", text: S.empty });
+    body.replaceChildren(notice, head, tiles, list);
   }
 
   // ---- account (both roles)

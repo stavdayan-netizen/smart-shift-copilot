@@ -108,6 +108,20 @@
     return !equal(sel, saved.sel) || String(text || "").trim() !== String(saved.text || "").trim();
   }
 
+  /* ["2026-12-01","2026-12-02","2026-12-04"] -> [{start:"2026-12-01",end:"2026-12-02"},{start:"2026-12-04",end:"2026-12-04"}] (input in any order, duplicates ignored). */
+  function groupDates(isoDates) {
+    var sorted = Array.from(new Set(isoDates || [])).sort(), out = [];
+    sorted.forEach(function (d) {
+      var last = out[out.length - 1];
+      if (last && nextDay(last.end) === d) last.end = d; else out.push({ start: d, end: d });
+    });
+    return out;
+  }
+  function nextDay(iso) {
+    var t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1);
+    return t.toISOString().slice(0, 10);
+  }
+
   function splitDuration(totalSeconds) {
     var s = Math.max(0, Math.floor(totalSeconds));
     return { days: Math.floor(s / 86400), hours: Math.floor((s % 86400) / 3600), minutes: Math.floor((s % 3600) / 60) };
@@ -115,7 +129,7 @@
 
   var api = { TEXT_MAX: TEXT_MAX, key: key, fromSlots: fromSlots, toSlots: toSlots, has: has, toggle: toggle, selectAll: selectAll,
               clearDay: clearDay, offFromSlots: offFromSlots, isOff: isOff, toggleOff: toggleOff, selectAllDay: selectAllDay, countDay: countDay, count: count, dayState: dayState, equal: equal, textLength: textLength,
-              problems: problems, isDirty: isDirty, splitDuration: splitDuration };
+              problems: problems, isDirty: isDirty, groupDates: groupDates, splitDuration: splitDuration };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AvailabilityModel = api;
 })(typeof window !== "undefined" ? window : globalThis);
