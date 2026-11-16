@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from . import auth, availability, clock, cycle_service, limits, throttle
+from . import auth, availability, clock, cycle_service, limits, submissions, throttle
 from .logging_setup import RequestContextMiddleware, configure_logging, log_event, log_exception
 from .agent import get_model_client, run_turn
 from .config import ROOT, settings
@@ -68,6 +68,7 @@ configure_logging(settings.log_level)
 app = FastAPI(title="Smart Shift Copilot", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None,
               openapi_url=None)  # no public API schema
 availability.register(app)
+submissions.register(app)
 
 
 @app.exception_handler(RequestValidationError)

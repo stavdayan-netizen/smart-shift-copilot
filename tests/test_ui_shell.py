@@ -274,10 +274,10 @@ def test_manager_and_employee_destinations_are_separate_and_only_implemented_one
     block = re.search(r"const DESTINATIONS = \{(.*?)\n  \};", APP_JS, flags=re.S).group(1)
     manager = re.search(r"manager: \[(.*?)\],\n", block, flags=re.S).group(1)
     employee = re.search(r"employee: \[(.*?)\],?\s*$", block, flags=re.S).group(1)
-    assert re.findall(r'id: "(\w+)"', manager) == ["assistant", "account"]
+    assert re.findall(r'id: "(\w+)"', manager) == ["assistant", "submissions", "account"]
     assert re.findall(r'id: "(\w+)"', employee) == ["availability", "account"]
     assert "disabled" not in block and "soon" not in block.lower()
-    assert "({ assistant: renderAssistant, availability: renderAvailability, account: renderAccount })" in APP_JS
+    assert "({ assistant: renderAssistant, submissions: renderSubmissions, availability: renderAvailability, account: renderAccount })" in APP_JS
 
 
 # ------------------------------------------------------------------ Hebrew API messages (authentication, session, authorization)
@@ -373,3 +373,15 @@ def test_availability_refinements_copy():
     assert "submission-status" in APP_JS and "fmtDeadline" in APP_JS
     css = (STATIC / "styles.css").read_text(encoding="utf-8")
     assert "repeat(2, minmax(0, 1fr))" not in css.split(".day-grid")[1].split("}")[0] and ".day-grid { grid-template-columns" not in css.split("@media (min-width: 768px)")[1]
+
+
+def test_submissions_tab_is_manager_only_read_only_and_uses_safe_rendering():
+    s = _strings()
+    assert s["nav"]["submissions"] == "הגשות עובדים" and s["submissions"]["title"] == "הגשות עובדים"
+    code = _strip_js_comments(APP_JS)
+    body = code.split("function renderSubmissions")[1].split("function renderAccount")[0]
+    assert '"/api/submissions"' in body and '"POST"' not in body and '"PUT"' not in body and '"DELETE"' not in body   # one GET, nothing written
+    assert "innerHTML" not in body and 'class: "free-text"' in body                                                   # free text is plain text
+    assert "leave_dates" in body and "full_week_leave" in body                                                         # leave shows when the API sends it
+    dest = APP_JS.split("const DESTINATIONS")[1].split("};")[0]
+    assert 'id: "submissions"' in dest.split("employee:")[0] and 'id: "submissions"' not in dest.split("employee:")[1]
