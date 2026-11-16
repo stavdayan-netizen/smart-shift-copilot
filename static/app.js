@@ -119,8 +119,8 @@
   }
 
   const DESTINATIONS = {
-    manager: [{ id: "assistant", label: "nav.assistant", icon: "sparkle" }, { id: "submissions", label: "nav.submissions", icon: "calendar" }, { id: "account", label: "nav.account", icon: "user" }],
-    employee: [{ id: "availability", label: "nav.availability", icon: "calendar" }, { id: "account", label: "nav.account", icon: "user" }],
+    manager: [{ id: "assistant", label: "nav.assistant", icon: "sparkle" }, { id: "submissions", label: "nav.submissions", icon: "calendar" }],
+    employee: [{ id: "availability", label: "nav.availability", icon: "calendar" }],
   };
   const destinations = () => DESTINATIONS[state.user.role] || DESTINATIONS.employee;
 
@@ -181,7 +181,7 @@
     if (!state.user) return;
     const wanted = (location.hash || "").replace(/^#\//, "");
     const allowed = destinations().map((d) => d.id);
-    const id = allowed.includes(wanted) ? wanted : allowed[0];
+    const id = allowed.includes(wanted) || wanted === "account" ? wanted : allowed[0];   // "account" is reached from the user menu, not the navigation
     if (id !== wanted) history.replaceState(null, "", "#/" + id);
     state.route = id;
     $("nav").querySelectorAll("a").forEach((a) => {
@@ -455,7 +455,13 @@
 
   function badge(text, kind) { return el("span", { class: "badge badge-" + kind, text }); }
 
-  function employeeCard(e) {
+  const fmtDayShort = (iso) => {
+    const p = {};
+    new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "UTC" }).formatToParts(new Date(iso + "T00:00:00Z")).forEach((x) => { p[x.type] = x.value; });
+    return `${p.weekday} ${p.day}.${p.month}`;
+  };
+
+  function employeeCard(e, weekDays) {
     const S = T.submissions;
     const badges = el("span", { class: "badges" });
     badges.append(e.status === "submitted" ? badge(S.statusSubmitted, "ok") : e.status === "exempt" ? badge(S.statusExempt, "leave") : badge(S.statusMissing, "missing"));
@@ -466,14 +472,19 @@
     if (e.updated_at) detail.append(el("p", { class: "muted", text: fmt(S.updated, { when: fmtStamp(e.updated_at) }) }));
     detail.append(el("h3", { text: S.shiftsTitle }));
     if (e.days.length) {
-      detail.append(el("ul", { class: "emp-days" }, e.days.map((d) => el("li", {},
-        el("strong", { text: fmtDay(d.date) + ", " + fmtDate(d.date) }),
-        el("span", { class: "emp-shifts" }, d.shifts.map((s) => el("span", { class: "emp-shift" }, el("span", { text: s.name }), " ", el("span", { class: "ltr", text: s.start_time + "–" + s.end_time }))))))));
+      // all seven days, each with its submitted shifts beside it (a dash for a day with none)
+      const byDay = {}; e.days.forEach((d) => { byDay[d.date] = d.shifts; });
+      detail.append(el("ul", { class: "emp-days" }, weekDays.map((day) => el("li", { class: "emp-day" },
+        el("strong", { class: "emp-day-name", text: fmtDayShort(day) }),
+        el("span", { class: "emp-shifts" }, (byDay[day] || []).length
+          ? byDay[day].map((s) => el("span", { class: "emp-shift" }, el("span", { text: s.name }), " ", el("span", { class: "ltr", text: s.start_time + "–" + s.end_time })))
+          : [el("span", { class: "muted", "aria-hidden": "true", text: "—" }), el("span", { class: "sr-only", text: S.noShiftsDay })])))));
     } else {
       detail.append(el("p", { class: "muted", text: e.status === "exempt" ? S.noShiftsExempt : S.noShifts }));
     }
-    detail.append(el("h3", { text: S.freeTitle }));
-    detail.append(e.free_text ? el("p", { class: "free-text", dir: "auto", text: e.free_text }) : el("p", { class: "muted", text: S.noFree }));
+    if (e.free_text) {      // the preferences section only exists when there is something to show
+      detail.append(el("h3", { text: S.freeTitle }), el("p", { class: "free-text", dir: "auto", text: e.free_text }));
+    }
     return el("details", { class: "emp-card", "data-status": e.status }, summary, detail);
   }
 
@@ -488,10 +499,9 @@
     const notice = el("div", { class: "notice notice-info", id: "subs-notice", role: "note" }, icon("info"),
       el("span", { text: fmt(cy.state === "closed" ? S.noticeClosed : S.noticeOpen, { when: fmtDeadlineComma(cy.closes_at) }) }));
     const head = el("section", { class: "card status-card" },
-      el("p", { class: "week-range", text: fmt(S.week, { start: fmtDate(d.week.start), end: fmtDate(d.week.end, true) }) }),
-      el("p", { class: "muted", text: S.readOnly }));
+      el("p", { class: "week-range", text: fmt(S.week, { start: fmtDate(d.week.start), end: fmtDate(d.week.end, true) }) }));
     const list = d.employees.length
-      ? el("section", { class: "emp-list", "aria-label": S.list }, d.employees.map(employeeCard))
+      ? el("section", { class: "emp-list", "aria-label": S.list }, d.employees.map((e) => employeeCard(e, d.week.days)))
       : el("p", { class: "muted", text: S.empty });
     body.replaceChildren(notice, head, tiles, list);
   }
@@ -571,7 +581,9 @@
     $("messages").replaceChildren(el("div", { class: "empty" },
       el("div", { class: "empty-icon" }, icon("sparkle")),
       el("h2", { text: T.assistant.emptyTitle }),
-      el("p", { text: T.assistant.emptyBody })));
+      el("p", { text: T.assistant.emptyIntro }),
+      el("ul", { class: "examples" }, [T.assistant.example1, T.assistant.example2, T.assistant.example3].map((q) => el("li", { text: q }))),
+      el("p", { class: "muted", text: T.assistant.emptyNote })));
   }
   function newChat() {
     state.current = null;

@@ -136,7 +136,7 @@ def get_model_client() -> ModelClient:
 
 def build_system(db: Session) -> list[dict]:
     today = clock.now().astimezone(ZoneInfo(settings.timezone)).date()  # the same clock the tools use (frozen in demos and evals)
-    window, state, _ = cycle_service.current(db)
+    window, state = cycle_service.report_window(db, clock.now())
     text = (SYSTEM_PATH.read_text(encoding="utf-8")
             .replace("{{TODAY}}", today.isoformat())
             .replace("{{WEEK_START}}", window.week_start.isoformat())

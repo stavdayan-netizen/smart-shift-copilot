@@ -274,8 +274,8 @@ def test_manager_and_employee_destinations_are_separate_and_only_implemented_one
     block = re.search(r"const DESTINATIONS = \{(.*?)\n  \};", APP_JS, flags=re.S).group(1)
     manager = re.search(r"manager: \[(.*?)\],\n", block, flags=re.S).group(1)
     employee = re.search(r"employee: \[(.*?)\],?\s*$", block, flags=re.S).group(1)
-    assert re.findall(r'id: "(\w+)"', manager) == ["assistant", "submissions", "account"]
-    assert re.findall(r'id: "(\w+)"', employee) == ["availability", "account"]
+    assert re.findall(r'id: "(\w+)"', manager) == ["assistant", "submissions"]      # "account" is reached from the user menu, not the navigation
+    assert re.findall(r'id: "(\w+)"', employee) == ["availability"]
     assert "disabled" not in block and "soon" not in block.lower()
     assert "({ assistant: renderAssistant, submissions: renderSubmissions, availability: renderAvailability, account: renderAccount })" in APP_JS
 
@@ -395,3 +395,23 @@ def test_submissions_notice_copy_and_placement():
     body = code.split("function drawSubmissions")[1].split("function renderAccount")[0]
     assert "body.replaceChildren(notice, head, tiles, list)" in body                    # below the heading, above the counts
     assert "cy.closes_at" in body and "d.cycle" in body                                  # the deadline of the displayed report's own window
+
+
+def test_account_is_not_in_the_navigation_but_stays_reachable_from_the_user_menu():
+    block = re.search(r"const DESTINATIONS = \{(.*?)\n  \};", APP_JS, flags=re.S).group(1)
+    assert 'id: "account"' not in block
+    code = _strip_js_comments(APP_JS)
+    assert 'wanted === "account"' in code and 'location.hash = "#/account"' in code      # the route survives; the menu item opens it
+    assert "account: renderAccount" in code
+
+
+def test_copilot_examples_and_submissions_card_copy():
+    s = _strings()
+    a, sub = s["assistant"], s["submissions"]
+    assert (a["example1"], a["example2"], a["example3"]) == ("מי יכול לעבוד ערב ביום שני?", "כמה עובדים הגישו זמינות ליום שישי בבוקר?", "מהן ההעדפות האישיות שמיכל ציינה?")
+    assert (sub["statusSubmitted"], sub["statusMissing"]) == ("הוגשה זמינות", "טרם הוגשה זמינות")
+    assert "readOnly" not in sub and "noFree" not in sub and "תצוגה לקריאה בלבד" not in STRINGS_JS
+    code = _strip_js_comments(APP_JS)
+    body = code.split("function employeeCard")[1].split("function drawSubmissions")[0]
+    assert "if (e.free_text)" in body and "S.freeTitle" in body                           # preferences only when there are some
+    assert "weekDays.map" in body                                                           # all seven days, shifts beside each

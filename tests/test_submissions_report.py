@@ -134,3 +134,16 @@ def test_the_report_is_read_only(world):
     assert c.get("/api/submissions").status_code == 200
     for method in ("post", "put", "delete", "patch"):
         assert getattr(c, method)("/api/submissions").status_code in (404, 405)
+
+
+def test_employees_with_missing_submissions_are_listed_first(world, monkeypatch):
+    week = [WEEK + timedelta(days=i) for i in range(7)]
+    monkeypatch.setattr(leave, "approved_leave", lambda db, w: {world["Chen"].id: set(week)})
+    rep = manager().get("/api/submissions").json()
+    rank = {"missing": 0, "exempt": 1, "submitted": 2}
+    ranks = [rank[r["status"]] for r in rep["employees"]]
+    assert ranks == sorted(ranks)                                         # missing, then exempt, then submitted
+    for status in ("missing", "exempt", "submitted"):
+        names = [r["name"] for r in rep["employees"] if r["status"] == status]
+        assert names == sorted(names)                                     # by name inside each group
+    assert rep["employees"][0]["status"] == "missing" and rep["employees"][-1]["status"] == "submitted"

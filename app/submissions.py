@@ -25,13 +25,7 @@ def _iso_utc(dt: datetime) -> str:
 
 
 def build_report(db: Session, now: datetime) -> dict:
-    window, state, _ = cycle_service.current(db, now)
-    if state == "not_open":
-        # The target week's window has not opened yet (e.g. the night after the deadline): the manager still needs the week
-        # that just closed, so report on that one instead of an empty future week.
-        prev = window.week_start - timedelta(days=7)
-        window = cycle.submission_window(prev, cycle_service.first_publication_of(db, prev - timedelta(days=7)))
-        state = cycle.window_state(window, now)
+    window, state = cycle_service.report_window(db, now)
     week = window.week_start
     days = [week + timedelta(days=i) for i in range(7)]
     shifts = {s.id: s for s in db.scalars(select(Shift)).all()}
@@ -62,6 +56,8 @@ def build_report(db: Session, now: datetime) -> dict:
                      for d, v in sorted(by_day.items())],
             "free_text": sub.free_text if sub is not None else None,
         })
+    # Missing first (they need the manager's attention), then exempt, then submitted; by name within each group.
+    rows.sort(key=lambda r: ({"missing": 0, "exempt": 1, "submitted": 2}[r["status"]], r["name"], r["id"]))
     counts = {"total": len(rows), "submitted": sum(r["status"] == "submitted" for r in rows),
               "exempt": sum(r["status"] == "exempt" for r in rows), "missing": sum(r["status"] == "missing" for r in rows)}
     return {"cycle": {"state": state, "opens_at": cycle.local(window.opens_at).isoformat(), "closes_at": cycle.local(window.closes_at).isoformat(),

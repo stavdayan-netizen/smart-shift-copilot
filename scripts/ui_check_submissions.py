@@ -39,6 +39,15 @@ PROBE = r"""
     h1Bottom: Math.round((document.querySelector('#main h1') || document.body).getBoundingClientRect().bottom),
     tilesTop: Math.round((document.querySelector('.stat-grid') || document.body).getBoundingClientRect().top),
     badges: q('.badge').map((b) => b.textContent),
+    navAccount: !!document.querySelector('#nav a[data-route=account]'),
+    navLabelCentered: (() => { const a = document.querySelector('#nav a[data-route=submissions]'); if (!a) return null;
+      const ic = a.querySelector('svg').getBoundingClientRect(), tx = a.querySelector('span').getBoundingClientRect();
+      return { dx: Math.round(Math.abs((ic.left + ic.right) / 2 - (tx.left + tx.right) / 2)), align: getComputedStyle(a).textAlign }; })(),
+    readOnlyText: document.body.innerText.includes('תצוגה לקריאה בלבד'),
+    openCardDays: q('.emp-card[open] .emp-day').length,
+    openCardRows: q('.emp-card[open] .emp-day').map((r) => { const n = r.querySelector('.emp-day-name').getBoundingClientRect(), s = r.querySelector('.emp-shifts').getBoundingClientRect();
+      return { besideOrAligned: Math.abs(n.top - s.top) < 12 && (s.right <= n.left || s.left >= n.right), width: Math.round(r.getBoundingClientRect().width) }; }),
+    openCardHasPrefs: q('.emp-card[open] h3').some((h) => h.textContent.includes('בקשות והעדפות')),
     detailText: cards.filter((c) => c.open).map((c) => c.querySelector('.emp-detail').innerText).join('\n'),
     htmlInFreeText: !!document.querySelector('.emp-detail .free-text b, .emp-detail .free-text script, .emp-detail .free-text img'),
   };
@@ -106,6 +115,13 @@ def main() -> int:
                 check(total == p["cards"] and total == sub + miss + exempt, f"{tag}: tiles {tiles} do not add up to {p['cards']} cards")
                 check(p["statuses"].count("submitted") == sub and p["statuses"].count("missing") == miss and p["statuses"].count("exempt") == exempt, f"{tag}: card statuses disagree with the tiles")
                 check(p["open"] == 0 and all(x >= 44 for x in p["summaryHeights"]), f"{tag}: cards start collapsed and summaries are >= 44 px: {p['summaryHeights']}")
+                rank = {"missing": 0, "exempt": 1, "submitted": 2}
+                check([rank[x] for x in p["statuses"]] == sorted(rank[x] for x in p["statuses"]) and p["statuses"][0] == "missing", f"{tag}: missing submissions must be listed first: {p['statuses']}")
+                check(any(x == "טרם הוגשה זמינות" for x in p["badges"]) and any(x == "הוגשה זמינות" for x in p["badges"]), f"{tag}: badge texts are {sorted(set(p['badges']))}")
+                check(not p["navAccount"], f"{tag}: the account link is still in the navigation")
+                nl = p["navLabelCentered"]
+                check(nl is not None and nl["dx"] <= 2 and nl["align"] == "center", f"{tag}: the submissions nav label is not centred under its icon: {nl}")
+                check(not p["readOnlyText"], f"{tag}: the redundant read-only line is still shown")
                 if args.expect_leave:
                     check(any("חופשה מאושרת לכל השבוע" in x for x in p["badges"]) and any(x.startswith("חופשה מאושרת:") for x in p["badges"]), f"{tag}: leave badges missing: {p['badges']}")
                     check(exempt >= 1, f"{tag}: no exempt employee counted")
@@ -117,6 +133,8 @@ def main() -> int:
                 settle(0.4)
                 p = b.js(PROBE)
                 check(p["open"] == 1 and "משמרות שהוגשו" in p["detailText"] and "–" in p["detailText"], f"{tag}: expanding did not show shifts: {p['detailText'][:80]!r}")
+                check(p["openCardDays"] == 7 and all(r["besideOrAligned"] for r in p["openCardRows"]), f"{tag}: the seven day rows are not compact with the shifts beside each day: {p['openCardRows']}")
+                check(p["openCardHasPrefs"], f"{tag}: an employee with preferences must show the preferences section")
                 check(not p["htmlInFreeText"], f"{tag}: free text was rendered as HTML")
                 b.js("document.querySelector('.emp-card[open]').scrollIntoView({block: 'start'})", False)
                 settle(0.3)
@@ -127,6 +145,13 @@ def main() -> int:
                 b.js("document.querySelector('.emp-card[open] summary').click()", False)
                 settle(0.3)
                 check(b.js(PROBE)["open"] == 0, f"{tag}: the card did not collapse")
+                # a submitted employee WITHOUT a free text: the preferences section must be hidden
+                b.js("(() => { const c = [...document.querySelectorAll('.emp-card[data-status=submitted]')].find((x) => !x.querySelector('.free-text')); c.querySelector('summary').click(); })()", False)
+                settle(0.3)
+                p = b.js(PROBE)
+                check(p["open"] == 1 and not p["openCardHasPrefs"], f"{tag}: an empty preferences section is still shown")
+                b.js("document.querySelector('.emp-card[open] summary').click()", False)
+                settle(0.2)
                 errs = [e for e in b.console if "401" not in e]
                 b.console.clear()
                 check(not errs, f"{tag}: console errors {errs[:2]}")

@@ -59,7 +59,7 @@ def a_manager(db):
 
 # ---------------------------------------------------------------- the tools
 def test_schemas_are_registered_and_well_formed():
-    assert {t["name"] for t in registry.TOOLS} == {"get_submission_status", "get_availability"} == set(registry.HANDLERS)
+    assert {t["name"] for t in registry.TOOLS} == {"get_submission_status", "get_availability", "get_availability_by_slot"} == set(registry.HANDLERS)
     for t in registry.TOOLS:
         assert t["input_schema"]["type"] == "object" and t["input_schema"]["additionalProperties"] is False
         assert t["description"].strip()
@@ -202,7 +202,7 @@ def test_the_anthropic_client_omits_an_empty_tools_list_and_sends_a_real_one():
     list(c.stream(system=[], messages=[], tools=[]))
     assert "tools" not in seen
     list(c.stream(system=[], messages=[], tools=registry.TOOLS))
-    assert [t["name"] for t in seen["tools"]] == ["get_submission_status", "get_availability"]
+    assert [t["name"] for t in seen["tools"]] == ["get_submission_status", "get_availability", "get_availability_by_slot"]
 
 
 def test_an_unknown_model_price_is_logged_not_silent(caplog):
@@ -244,3 +244,46 @@ def test_tool_dates_carry_hebrew_weekday_names(db, world):
     assert [d["weekday"] for d in a["days"]] == ["יום ראשון", "יום שני"]
     assert [shift_tools.weekday_he(date(2026, 11, 22) + timedelta(days=i)) for i in range(7)] == [
         "יום ראשון", "יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת"]
+
+
+# ---------------------------------------------------------------- get_availability_by_slot
+def test_slot_query_names_and_counts_for_one_day_and_shift(db, world):
+    r = shift_tools.get_availability_by_slot(db, {"day": "יום שני", "shift": "ערב", "week_start": "2026-11-29"})
+    assert [(s["date"], s["weekday"], s["shift"]) for s in r["slots"]] == [("2026-11-30", "יום שני", "ערב")]
+    slot = r["slots"][0]
+    assert slot["available"] == [world.names["Dana"]] and slot["available_count"] == 1
+    assert (slot["from"], slot["to"]) == ("16:00", "00:00")
+
+
+def test_slot_query_never_infers_availability_for_employees_who_did_not_submit(db, world):
+    r = shift_tools.get_availability_by_slot(db, {"week_start": "2026-11-29"})
+    assert world.names["Yael"] in r["not_submitted"] and r["not_submitted_count"] == len(r["not_submitted"])
+    assert all(world.names["Yael"] not in s["available"] for s in r["slots"])
+    assert "unknown" in r["note"]
+    assert r["submitted_count"] + r["not_submitted_count"] == r["employees_total"]
+    empty = shift_tools.get_availability_by_slot(db, {"day": "שישי", "shift": "בוקר", "week_start": "2026-11-29"})["slots"][0]
+    assert empty["available"] == [] and empty["available_count"] == 0     # nobody offered it; the others are unknown, not "available"
+
+
+def test_slot_query_without_filters_covers_every_day_and_shift_and_adds_up(db, world):
+    r = shift_tools.get_availability_by_slot(db, {"week_start": "2026-11-29"})
+    assert len(r["slots"]) == 14
+    assert sum(s["available_count"] for s in r["slots"]) == 3            # Dana 2 slots + Noam 1 slot in the fixture
+    only_shift = shift_tools.get_availability_by_slot(db, {"shift": "בוקר", "week_start": "2026-11-29"})
+    assert len(only_shift["slots"]) == 7 and sum(s["available_count"] for s in only_shift["slots"]) == 1
+
+
+def test_slot_query_day_forms_and_validation(db, world):
+    by_name = shift_tools.get_availability_by_slot(db, {"day": "שלישי", "shift": "ערב", "week_start": "2026-11-29"})["slots"][0]
+    by_date = shift_tools.get_availability_by_slot(db, {"day": "2026-12-01", "shift": "ערב", "week_start": "2026-11-29"})["slots"][0]
+    assert by_name == by_date and by_name["available"] == [world.names["Noam"]]
+    assert shift_tools.get_availability_by_slot(db, {"day": "ב׳", "week_start": "2026-11-29"})["slots"][0]["date"] == "2026-11-30"
+    for bad in ({"day": "מחר"}, {"day": "2026-12-20"}, {"shift": "לילה"}, {"week_start": "2026-12-01"}):
+        with pytest.raises(shift_tools.ToolInputError):
+            shift_tools.get_availability_by_slot(db, bad)
+
+
+def test_slot_query_is_registered_read_only_and_leaks_no_secrets(db, world):
+    text = registry.execute("get_availability_by_slot", {"day": "ראשון"}, db)
+    for needle in ("code_hash", "token_version", "password", "free_text"):
+        assert needle not in text                                     # names and counts only, not the employees' free text
