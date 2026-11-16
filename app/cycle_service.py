@@ -37,6 +37,19 @@ def current(db: Session, now: datetime | None = None) -> tuple[cycle.Window, cyc
     return window, cycle.window_state(window, now), published
 
 
+def report_window(db: Session, now: datetime | None = None) -> tuple[cycle.Window, cycle.State]:
+    """The (window, state) a MANAGER reads submissions for: the week submissions concern now, or, while that week's window has
+    not opened yet (the night after a deadline), the week that just closed, so the review after the deadline is never an empty
+    future week. State is therefore "open" or "closed". The manager's report, the Copilot's tools and its prompt all use this."""
+    now = now or clock.now()
+    window, state, _ = current(db, now)
+    if state == "not_open":
+        prev = window.week_start - timedelta(days=7)
+        window = cycle.submission_window(prev, first_publication_of(db, prev - timedelta(days=7)))
+        state = cycle.window_state(window, now)
+    return window, state
+
+
 def status_payload(db: Session, now: datetime | None = None) -> dict:
     now = now or clock.now()
     window, state, published = current(db, now)

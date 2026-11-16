@@ -1,10 +1,11 @@
-# UI checks: manager "הגשות עובדים" tab
+# UI checks: manager "הגשות עובדים" tab (refinement round)
 
-Real Edge (headless) via `scripts/ui_check_submissions.py`, fake model, fresh SQLite database, fictional data, clock frozen on an
-open window, 2026-11-16. Viewports 360, 390, 768, 1280 x light and dark: **8 runs, 0 problems.** Four of the eight employees
-submitted (one with HTML and a script tag in the free text, shown as plain text). Checked: the tab exists for the manager and not
-for an employee (who also cannot open the route); tiles add up to one card per employee; cards start collapsed, expand and collapse
-with a real click, show exact shifts and times and the free text; summaries are at least 44 px high; no horizontal overflow; RTL; the dated notice sits below the heading and above the counts and shows the window's real closing date.
-There is no leave data yet (Issue #28), so no leave appears here. `../submissions-tab-injected-leave/` is the same check with leave
-injected by a test-only launcher to show the badges (one full-week exemption, partial leave with and without a submission).
-Not covered: a real phone, screen readers.
+Real Edge (headless) via `scripts/ui_check_submissions.py`, fake model, fresh SQLite database, fictional data, clock frozen on an open
+window, 2026-11-17. Viewports 360, 390, 768, 1280 x light and dark: **8 runs, 0 problems.** Checked: the dated notice (exact text,
+between the heading and the counts); employees with missing submissions listed first; badges "הוגשה זמינות" / "טרם הוגשה זמינות";
+no "החשבון שלי" in the navigation (it stays in the user menu) and the "הגשות עובדים" label centred under its icon; no read-only line;
+expanded cards show all seven days with the shifts beside each day (compact, wraps on narrow screens), the preferences section only when
+the employee wrote something (free text with HTML shown as plain text); the page does not overflow; summaries are at least 44 px; an
+employee has no such tab. `scripts/ui_check_user_menu.py` (8 runs), `scripts/ui_check_availability.py` (44 checks) and `scripts/ui_check.py`
+(100 checks) were re-run on this branch with 0 problems (their older screenshots in this folder's siblings were not regenerated).
+There is no leave data yet (Issue #28). Not covered: a real phone, screen readers.
