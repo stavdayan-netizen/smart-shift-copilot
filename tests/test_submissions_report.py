@@ -136,14 +136,78 @@ def test_the_report_is_read_only(world):
         assert getattr(c, method)("/api/submissions").status_code in (404, 405)
 
 
-def test_employees_with_missing_submissions_are_listed_first(world, monkeypatch):
+def test_default_order_is_submitted_newest_first_then_missing_by_name_then_exempt(world, monkeypatch):
     week = [WEEK + timedelta(days=i) for i in range(7)]
-    monkeypatch.setattr(leave, "approved_leave", lambda db, w: {world["Chen"].id: set(week)})
+    monkeypatch.setattr(leave, "approved_leave", lambda db, w: {world["Dror"].id: set(week)})      # Dror: full-week leave, no submission
     rep = manager().get("/api/submissions").json()
-    rank = {"missing": 0, "exempt": 1, "submitted": 2}
-    ranks = [rank[r["status"]] for r in rep["employees"]]
-    assert ranks == sorted(ranks)                                         # missing, then exempt, then submitted
-    for status in ("missing", "exempt", "submitted"):
-        names = [r["name"] for r in rep["employees"] if r["status"] == status]
-        assert names == sorted(names)                                     # by name inside each group
-    assert rep["employees"][0]["status"] == "missing" and rep["employees"][-1]["status"] == "submitted"
+    rows = rep["employees"]
+    rank = {"submitted": 0, "missing": 1, "exempt": 2}
+    assert [rank[r["status"]] for r in rows] == sorted(rank[r["status"]] for r in rows)
+    submitted = [r for r in rows if r["status"] == "submitted"]
+    assert [r["updated_at"] for r in submitted] == sorted((r["updated_at"] for r in submitted), reverse=True)     # newest first
+    for status in ("missing", "exempt"):
+        names = [r["name"] for r in rows if r["status"] == status]
+        assert names == sorted(names)                                                                              # by name
+    assert rows[0]["status"] == "submitted" and rows[-1]["status"] == "exempt" and rows[-1]["id"] == world["Dror"].id
+
+
+def test_every_submitted_employee_carries_a_timestamp_and_nobody_else_does(world):
+    rows = manager().get("/api/submissions").json()["employees"]
+    for r in rows:
+        assert (r["updated_at"] is not None) == (r["status"] == "submitted")
+        if r["updated_at"]:
+            assert r["updated_at"].endswith("Z")                                                                    # UTC, shown in Israel time by the UI
+
+
+def test_leave_filter_shows_only_full_week_exempt_employees_never_partial_leave(world, monkeypatch):
+    week = [WEEK + timedelta(days=i) for i in range(7)]
+    monkeypatch.setattr(leave, "approved_leave", lambda db, w: {world["Chen"].id: set(week), world["Anna"].id: {WEEK + timedelta(days=2)}})
+    rep = manager().get("/api/submissions").json()
+    on_leave = [r["name"] for r in rep["employees"] if r["status"] == "exempt"]
+    assert on_leave == [world["Chen"].name] and rep["counts"]["exempt"] == 1                                       # the "בחופשה" card
+    anna = row(rep, world["Anna"])
+    assert anna["status"] == "submitted" and anna["leave_dates"] and not anna["full_week_leave"]                    # partial leave stays with her status
+
+
+def test_without_leave_data_the_on_leave_count_is_zero_and_nobody_is_listed(world):
+    rep = manager().get("/api/submissions").json()
+    assert rep["counts"]["exempt"] == 0 and not [r for r in rep["employees"] if r["status"] == "exempt"]
+    assert all(r["leave_dates"] == [] for r in rep["employees"])                                                     # nothing is invented
+
+
+def test_counts_order_and_timestamps_follow_new_submissions_and_edits(world, db):
+    import time
+
+    from app import availability  # noqa: F401  (the real endpoints are used below)
+
+    ids = {s.name: s.id for s in db.scalars(select(Shift)).all()}
+    tag = uuid.uuid4().hex[:6]
+    emps = {k: create_employee(db, f"Live{k}{tag}") for k in ("A", "B")}
+
+    def login(user, code):
+        c = TestClient(app, headers=H)
+        assert c.post("/api/login", json={"name": user.name, "code": code}).status_code == 200
+        return c
+
+    def save(client, *pairs, text=None):
+        body = {"week_start": WEEK.isoformat(), "slots": [{"day": (WEEK + timedelta(days=d)).isoformat(), "shift_id": ids[n]} for d, n in pairs], "free_text": text}
+        assert client.put("/api/availability", json=body).status_code == 200
+
+    m = manager()
+    before = m.get("/api/submissions").json()
+    ca, cb = login(*emps["A"]), login(*emps["B"])
+    save(ca, (0, "בוקר"))
+    time.sleep(0.05)
+    save(cb, (1, "ערב"), text="שלום")
+    rep = m.get("/api/submissions").json()
+    order = [r["name"] for r in rep["employees"] if r["name"].startswith("Live")]
+    assert order == [emps["B"][0].name, emps["A"][0].name]                                                           # B submitted last: newest first
+    assert rep["counts"]["submitted"] == before["counts"]["submitted"] + 2 and rep["counts"]["missing"] == before["counts"]["missing"] - 2
+    t_a = row(rep, emps["A"][0])["updated_at"]
+    time.sleep(0.05)
+    save(ca, (0, "בוקר"), (3, "ערב"))                                                                                # A edits: moves to the top, timestamp moves
+    rep2 = m.get("/api/submissions").json()
+    assert [r["name"] for r in rep2["employees"] if r["name"].startswith("Live")] == [emps["A"][0].name, emps["B"][0].name]
+    a2 = row(rep2, emps["A"][0])
+    assert a2["updated_at"] > t_a and len(a2["days"]) == 2
+    assert rep2["counts"] == rep["counts"]                                                                           # an edit does not change the counts

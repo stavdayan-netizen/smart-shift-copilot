@@ -56,8 +56,11 @@ def build_report(db: Session, now: datetime) -> dict:
                      for d, v in sorted(by_day.items())],
             "free_text": sub.free_text if sub is not None else None,
         })
-    # Missing first (they need the manager's attention), then exempt, then submitted; by name within each group.
-    rows.sort(key=lambda r: ({"missing": 0, "exempt": 1, "submitted": 2}[r["status"]], r["name"], r["id"]))
+    # Default order: submitted employees first, newest submission or update first; then missing employees by name; then employees
+    # exempt by full-week approved leave (kept apart), by name. The UI's filters keep this relative order.
+    rows.sort(key=lambda r: (r["name"], r["id"]))
+    submitted = sorted((r for r in rows if r["status"] == "submitted"), key=lambda r: r["updated_at"], reverse=True)   # newest first (ISO UTC sorts chronologically; ties keep name order)
+    rows = submitted + [r for r in rows if r["status"] == "missing"] + [r for r in rows if r["status"] == "exempt"]
     counts = {"total": len(rows), "submitted": sum(r["status"] == "submitted" for r in rows),
               "exempt": sum(r["status"] == "exempt" for r in rows), "missing": sum(r["status"] == "missing" for r in rows)}
     return {"cycle": {"state": state, "opens_at": cycle.local(window.opens_at).isoformat(), "closes_at": cycle.local(window.closes_at).isoformat(),

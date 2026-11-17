@@ -99,5 +99,16 @@ test("approved leave dates are grouped into consecutive ranges", () => {
   eq(M.groupDates([]), []); eq(M.groupDates(null), []);
 });
 
+test("status filters: total shows everyone, leave shows only full-week exempt employees, order is kept", () => {
+  const e = [{ id: 1, status: "submitted", leave_dates: ["2026-12-01"] }, { id: 2, status: "missing" }, { id: 3, status: "exempt" }, { id: 4, status: "submitted" }, { id: 5, status: "missing" }];
+  eq(M.filterEmployees(e, "total").map((x) => x.id), [1, 2, 3, 4, 5]);
+  eq(M.filterEmployees(e, "submitted").map((x) => x.id), [1, 4]);
+  eq(M.filterEmployees(e, "missing").map((x) => x.id), [2, 5]);
+  eq(M.filterEmployees(e, "leave").map((x) => x.id), [3], "partial leave (employee 1) never appears under leave");
+  eq(M.filterEmployees(e, "nonsense").map((x) => x.id), [1, 2, 3, 4, 5]);
+  eq(M.filterEmployees([], "leave"), []);
+  const input = e.slice(); M.filterEmployees(input, "missing"); eq(input.length, 5, "the input is not mutated");
+});
+
 console.log((count - failures) + "/" + count + " availability tests passed");
 process.exit(failures ? 1 : 0);

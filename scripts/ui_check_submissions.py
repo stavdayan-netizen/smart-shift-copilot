@@ -31,6 +31,13 @@ PROBE = r"""
     hash: location.hash, h1: (document.querySelector('#main h1') || {}).textContent || '',
     navHas: q('#nav a').map((a) => a.getAttribute('data-route')),
     tiles: q('.stat').map((t) => [t.querySelector('.stat-l').textContent, parseInt(t.querySelector('.stat-n').textContent, 10)]),
+    pressed: q('.stat').map((t) => t.getAttribute('aria-pressed')),
+    tileTops: q('.stat').map((t) => Math.round(t.getBoundingClientRect().top)),
+    tileBorders: q('.stat').map((t) => getComputedStyle(t).borderTopColor),
+    tileTags: q('.stat').map((t) => t.tagName),
+    cardIds: cards.map((c) => c.dataset.id),
+    updatedTexts: cards.map((c) => (c.querySelector('.emp-updated') || {}).textContent || ''),
+    emptyState: (document.getElementById('subs-empty') || {}).textContent || '',
     cards: cards.length, open: cards.filter((c) => c.open).length,
     statuses: cards.map((c) => c.dataset.status),
     summaryHeights: q('.emp-summary').map((s) => Math.round(s.getBoundingClientRect().height)),
@@ -109,14 +116,51 @@ def main() -> int:
                 if args.expect_notice:
                     check(p["noticeText"].strip() == args.expect_notice, f"{tag}: notice is {p['noticeText']!r}")
                 check(p["h1Bottom"] <= p["noticeTop"] < p["tilesTop"], f"{tag}: the notice must sit below the heading and above the counts ({p['h1Bottom']}, {p['noticeTop']}, {p['tilesTop']})")
-                tiles = dict(p["tiles"])
-                total, sub, miss = tiles.get("סה״כ עובדים"), tiles.get("הגישו"), tiles.get("טרם הגישו")
-                exempt = tiles.get("פטורים מהגשה", 0)
-                check(total == p["cards"] and total == sub + miss + exempt, f"{tag}: tiles {tiles} do not add up to {p['cards']} cards")
+                tiles = p["tiles"]
+                labels = [t[0] for t in tiles]
+                check(labels == ["סה״כ עובדים", "הגישו", "טרם הגישו", "בחופשה"], f"{tag}: the four filter cards are {labels}")
+                counts = {t[0]: t[1] for t in tiles}
+                total, sub, miss, exempt = counts["סה״כ עובדים"], counts["הגישו"], counts["טרם הגישו"], counts["בחופשה"]
+                check(set(p["tileTags"]) == {"BUTTON"} and p["pressed"] == ["true", "false", "false", "false"], f"{tag}: the cards must be buttons with 'total' selected by default: {p['pressed']}")
+                check(total == p["cards"] and total == sub + miss + exempt, f"{tag}: tiles {counts} do not add up to {p['cards']} cards")
                 check(p["statuses"].count("submitted") == sub and p["statuses"].count("missing") == miss and p["statuses"].count("exempt") == exempt, f"{tag}: card statuses disagree with the tiles")
+                check(len(set(p["tileBorders"])) == 2 and p["tileBorders"][0] != p["tileBorders"][1], f"{tag}: the selected card is not visibly different: {p['tileBorders']}")
+                tops = sorted(set(p["tileTops"]))
+                check(len(tops) == (1 if w >= 768 else 2), f"{tag}: the four cards must be one row on desktop and a 2x2 grid on mobile (rows at {tops})")
+                rank = {"submitted": 0, "missing": 1, "exempt": 2}
+                check([rank[x] for x in p["statuses"]] == sorted(rank[x] for x in p["statuses"]), f"{tag}: order must be submitted, missing, exempt: {p['statuses']}")
+                check(all(bool(t) == (st == "submitted") for t, st in zip(p["updatedTexts"], p["statuses"])) and all(t.startswith("עדכון אחרון: ") for t in p["updatedTexts"] if t), f"{tag}: the last update belongs in every submitted card and only there: {p['updatedTexts']}")
+                api_order = b.js("fetch('/api/submissions', {headers: {'X-Requested-With': 'shift-copilot'}}).then((r) => r.json()).then((d) => ({ids: d.employees.map((e) => String(e.id)), upd: d.employees.filter((e) => e.status === 'submitted').map((e) => e.updated_at)}))")
+                check(api_order["ids"] == p["cardIds"], f"{tag}: the cards do not follow the server order")
+                check(api_order["upd"] == sorted(api_order["upd"], reverse=True), f"{tag}: submitted employees must be newest first: {api_order['upd']}")
+                # every filter: pressed state, visible cards, empty states
+                for idx, (key, want_status) in enumerate((("total", None), ("submitted", "submitted"), ("missing", "missing"), ("leave", "exempt"))):
+                    b.js(f"document.querySelector('.stat[data-filter={key}]').click()", False)
+                    settle(0.25)
+                    q = b.js(PROBE)
+                    shown = q["statuses"]
+                    check(q["pressed"] == ["true" if k == idx else "false" for k in range(4)], f"{tag}/{key}: pressed state {q['pressed']}")
+                    want = [x for x in p["statuses"] if want_status is None or x == want_status]
+                    check(shown == want, f"{tag}/{key}: shows {shown}, expected {want}")
+                    if not want:
+                        check(q["emptyState"].strip() != "", f"{tag}/{key}: an empty filter needs an empty state")
+                    if key == "leave" and not args.expect_leave:
+                        check(exempt == 0 and shown == [] and "בחופשה מאושרת" in q["emptyState"], f"{tag}: with no leave data the leave card is 0 and shows its empty state: {q['emptyState']!r}")
+                    if key == "leave" and args.expect_leave:
+                        check(shown and set(shown) == {"exempt"}, f"{tag}: the leave filter must list only exempt employees: {shown}")
+                    if key == "leave":
+                        b.shot(out / f"{vp}-{scheme}-filter-leave.jpg")
+                    if key == "missing":
+                        b.shot(out / f"{vp}-{scheme}-filter-missing.jpg")
+                # the selection survives the refresh button, then return to the default view
+                b.js("document.querySelector('.stat[data-filter=missing]').click()", False)
+                b.js("document.getElementById('subs-refresh').click()", False)
+                settle(1.0)
+                check(b.js(PROBE)["pressed"] == ["false", "false", "true", "false"], f"{tag}: the selected filter must survive a refresh")
+                b.js("document.querySelector('.stat[data-filter=total]').click()", False)
+                settle(0.2)
+                p = b.js(PROBE)
                 check(p["open"] == 0 and all(x >= 44 for x in p["summaryHeights"]), f"{tag}: cards start collapsed and summaries are >= 44 px: {p['summaryHeights']}")
-                rank = {"missing": 0, "exempt": 1, "submitted": 2}
-                check([rank[x] for x in p["statuses"]] == sorted(rank[x] for x in p["statuses"]) and p["statuses"][0] == "missing", f"{tag}: missing submissions must be listed first: {p['statuses']}")
                 check(any(x == "טרם הוגשה זמינות" for x in p["badges"]) and any(x == "הוגשה זמינות" for x in p["badges"]), f"{tag}: badge texts are {sorted(set(p['badges']))}")
                 check(not p["navAccount"], f"{tag}: the account link is still in the navigation")
                 nl = p["navLabelCentered"]
@@ -129,7 +173,7 @@ def main() -> int:
                     check(not any("חופשה" in x for x in p["badges"]) and exempt == 0, f"{tag}: leave shown although no leave data exists: {p['badges']}")
                 b.shot(out / f"{vp}-{scheme}-collapsed.jpg")
                 # expand the first submitted card through a real click on its summary
-                b.js("document.querySelector('.emp-card[data-status=submitted] summary').click()", False)
+                b.js("[...document.querySelectorAll('.emp-card[data-status=submitted]')].find((x) => x.querySelector('.free-text')).querySelector('summary').click()", False)
                 settle(0.4)
                 p = b.js(PROBE)
                 check(p["open"] == 1 and "משמרות שהוגשו" in p["detailText"] and "–" in p["detailText"], f"{tag}: expanding did not show shifts: {p['detailText'][:80]!r}")
