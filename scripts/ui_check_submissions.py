@@ -45,12 +45,22 @@ PROBE = r"""
     noticeTop: Math.round((document.getElementById('subs-notice') || document.body).getBoundingClientRect().top),
     h1Bottom: Math.round((document.querySelector('#main h1') || document.body).getBoundingClientRect().bottom),
     tilesTop: Math.round((document.querySelector('.stat-grid') || document.body).getBoundingClientRect().top),
+    brandGap: (() => { const i = document.querySelector('.appbar .brand-icon'), t = document.querySelector('.appbar .brand span'); if (!i || !t) return null; return Math.round(t.getBoundingClientRect().left - i.getBoundingClientRect().right); })(),
+    brandIcon: (() => { const i = document.querySelector('.appbar .brand-icon'); return i ? Math.round(i.getBoundingClientRect().width) : null; })(),
+    group: (() => { const c = document.querySelector('.emp-card[data-status=submitted]'); if (!c) return null;
+      const r = (el) => el.getBoundingClientRect(), n = r(c.querySelector('.emp-name')), bd = r(c.querySelector('.badge')), up = r(c.querySelector('.emp-updated')), m = r(c.querySelector('.emp-main'));
+      const sameRow = (a, b) => Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 12;
+      return { nameBadge: sameRow(n, bd) ? Math.round(n.left - bd.right) : null, badgeUpdated: sameRow(bd, up) ? Math.round(bd.left - up.right) : null,
+               nameBadgeVertical: sameRow(n, bd) ? 0 : Math.round(bd.top - n.bottom), groupHeight: Math.round(m.height), summaryHeight: Math.round(r(c.querySelector('summary')).height) }; })(),
     badges: q('.badge').map((b) => b.textContent),
     navAccount: !!document.querySelector('#nav a[data-route=account]'),
     navLabelCentered: (() => { const a = document.querySelector('#nav a[data-route=submissions]'); if (!a) return null;
       const ic = a.querySelector('svg').getBoundingClientRect(), tx = a.querySelector('span').getBoundingClientRect();
       return { dx: Math.round(Math.abs((ic.left + ic.right) / 2 - (tx.left + tx.right) / 2)), align: getComputedStyle(a).textAlign }; })(),
     readOnlyText: document.body.innerText.includes('תצוגה לקריאה בלבד'),
+    openCardGeom: q('.emp-card[open] .emp-day').map((r) => { const n = r.querySelector('.emp-day-name').getBoundingClientRect(), s = r.querySelector('.emp-shifts').getBoundingClientRect(), b = r.getBoundingClientRect();
+      return { nameLeft: Math.round(n.left), nameRight: Math.round(n.right), nameWidth: Math.round(n.width), shiftsRight: Math.round(s.right), top: Math.round(b.top), height: Math.round(b.height),
+               chipTops: [...r.querySelectorAll('.emp-shift')].map((c) => Math.round(c.getBoundingClientRect().top)) }; }),
     openCardDays: q('.emp-card[open] .emp-day').length,
     openCardRows: q('.emp-card[open] .emp-day').map((r) => { const n = r.querySelector('.emp-day-name').getBoundingClientRect(), s = r.querySelector('.emp-shifts').getBoundingClientRect();
       return { besideOrAligned: Math.abs(n.top - s.top) < 12 && (s.right <= n.left || s.left >= n.right), width: Math.round(r.getBoundingClientRect().width) }; }),
@@ -163,6 +173,13 @@ def main() -> int:
                 check(p["open"] == 0 and all(x >= 44 for x in p["summaryHeights"]), f"{tag}: cards start collapsed and summaries are >= 44 px: {p['summaryHeights']}")
                 check(any(x == "טרם הוגשה זמינות" for x in p["badges"]) and any(x == "הוגשה זמינות" for x in p["badges"]), f"{tag}: badge texts are {sorted(set(p['badges']))}")
                 check(not p["navAccount"], f"{tag}: the account link is still in the navigation")
+                check(p["brandIcon"] == 32 and p["brandGap"] == (6 if w >= 768 else 10), f"{tag}: header icon {p['brandIcon']} px, gap to the name {p['brandGap']} px (6 on desktop, 10 on mobile)")
+                g = p["group"]
+                check(g is not None and g["groupHeight"] <= (34 if w >= 768 else 62) and g["summaryHeight"] >= 44, f"{tag}: the collapsed card group is not compact: {g}")
+                if g and w >= 768:
+                    check(g["nameBadge"] is not None and 0 < g["nameBadge"] <= 14 and g["badgeUpdated"] is not None and 0 < g["badgeUpdated"] <= 12, f"{tag}: name, badge and last update must sit together in one row on desktop: {g}")
+                elif g:
+                    check(g["nameBadge"] is not None and 0 < g["nameBadge"] <= 14, f"{tag}: on mobile the name and the status badge must still share a row: {g}")
                 nl = p["navLabelCentered"]
                 check(nl is not None and nl["dx"] <= 2 and nl["align"] == "center", f"{tag}: the submissions nav label is not centred under its icon: {nl}")
                 check(not p["readOnlyText"], f"{tag}: the redundant read-only line is still shown")
@@ -180,6 +197,13 @@ def main() -> int:
                 check(p["openCardDays"] == 7 and all(r["besideOrAligned"] for r in p["openCardRows"]), f"{tag}: the seven day rows are not compact with the shifts beside each day: {p['openCardRows']}")
                 check("לא זמין/ה" in p["detailText"], f"{tag}: explicitly unavailable days must be shown as 'לא זמין/ה': {p['detailText'][:200]!r}")
                 check(p["openCardHasPrefs"], f"{tag}: an employee with preferences must show the preferences section")
+                gm = p["openCardGeom"]
+                check(len(gm) == 7 and len({r["nameLeft"] for r in gm}) == 1 and len({r["nameWidth"] for r in gm}) == 1, f"{tag}: the day/date labels must share one fixed-width column: {[(r['nameLeft'], r['nameWidth']) for r in gm]}")
+                check(all(gm[i]["top"] < gm[i + 1]["top"] for i in range(6)), f"{tag}: every day must be on its own row")
+                check(len({r["nameRight"] for r in gm}) == 1 and all(r["nameRight"] <= r["shiftsRight"] or True for r in gm), f"{tag}: the label column must be aligned")
+                check(all(len(set(r["chipTops"])) <= 2 for r in gm) and all(r["height"] <= (60 if w >= 768 else 76) for r in gm), f"{tag}: day rows must stay compact: {[r['height'] for r in gm]}")
+                if w >= 390:
+                    check(all(len(set(r["chipTops"])) <= 1 for r in gm), f"{tag}: multiple shifts of a day should sit together on one line: {[r['chipTops'] for r in gm]}")
                 check(not p["htmlInFreeText"], f"{tag}: free text was rendered as HTML")
                 b.js("document.querySelector('.emp-card[open]').scrollIntoView({block: 'start'})", False)
                 settle(0.3)

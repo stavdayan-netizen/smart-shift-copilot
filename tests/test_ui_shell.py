@@ -436,7 +436,7 @@ def test_summary_cards_are_the_filters_with_the_requested_labels_and_order():
 def test_filter_cards_are_four_in_a_row_on_desktop_and_two_by_two_on_mobile_with_a_visible_selected_state():
     mobile = CSS.split("@media (min-width: 768px)")[0]
     assert ".stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));" in mobile
-    assert "repeat(4, minmax(0, 1fr))" in CSS.split("@media (min-width: 768px)")[1].split(".emp-summary")[1].split("}")[0] or ".stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in CSS
+    assert ".stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in CSS.split("@media (min-width: 768px)")[1]
     assert '.stat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft)' in CSS
 
 
@@ -459,3 +459,16 @@ def test_the_form_requires_a_choice_for_every_day_and_names_the_missing_days():
     # an incomplete form can still be submitted so the click explains it; only an over-long text or a clean form disables the button
     assert 'submit.disabled = avail.busy || probs.includes("text_too_long") || (!!d.submission && !dirty)' in code
     assert ".day-card.is-unset" in CSS and ".day-card.has-error" in CSS and "prefers-reduced-motion" in code
+
+
+def test_compact_card_and_header_refinements_are_in_the_stylesheet_and_markup():
+    desktop = CSS.split("@media (min-width: 768px)")[1]
+    assert ".brand { gap: 6px; }" in desktop and ".brand { display: inline-flex; align-items: center; gap: 10px;" in CSS        # tighter on desktop only
+    assert ".brand-icon { inline-size: 32px; block-size: 32px;" in CSS                                                      # sizes unchanged
+    # collapsed cards: name, badge and timestamp are one group (wrapping close together on a narrow card), the chevron is apart
+    assert ".emp-main { flex: 1 1 auto;" in CSS and "column-gap: 8px; row-gap: 2px;" in CSS and ".badges { display: contents; }" in CSS
+    code = _strip_js_comments(APP_JS)
+    assert 'el("span", { class: "emp-main" }, el("span", { class: "emp-name"' in code and 'class: "emp-updated"' in code
+    # expanded cards: one row per day, a fixed-width label column and a flexible shifts column, wider on desktop
+    assert ".emp-day { display: grid; grid-template-columns: 7rem minmax(0, 1fr);" in CSS and ".emp-day { grid-template-columns: 9.5rem minmax(0, 1fr); }" in desktop
+    assert 'class: "emp-day-name" }, el("span", { class: "emp-day-w"' in code and 'class: "emp-day-d"' in code and "weekDays.map" in code

@@ -305,14 +305,15 @@ main:focus { outline: none; }
 .emp-list { display: grid; gap: 10px; }
 .emp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-inline-size: 0; }
 .emp-card[open] { border-color: var(--line-strong); }
-.emp-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; min-block-size: 56px; padding: 10px 14px; cursor: pointer; list-style: none; border-radius: var(--radius); }
+.emp-summary { display: flex; align-items: center; gap: 12px; min-block-size: 56px; padding: 10px 14px; cursor: pointer; list-style: none; border-radius: var(--radius); }
 .emp-summary::-webkit-details-marker { display: none; }
 .emp-summary:hover { background: var(--surface-2); }
 .emp-summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.emp-name { font-weight: 700; font-size: 1.0625rem; overflow-wrap: anywhere; grid-column: 1; }
-.badges { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; grid-row: 2; }
-.badges:empty { display: none; }
-.emp-chevron { grid-column: 2; grid-row: 1; color: var(--muted); display: inline-flex; transition: transform .15s; }
+/* the name, the status badge and the last update are one compact group; on a narrow card the badges wrap under the name, close to it */
+.emp-main { flex: 1 1 auto; min-inline-size: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; }
+.emp-name { font-weight: 700; font-size: 1.0625rem; overflow-wrap: anywhere; min-inline-size: 0; }
+.badges { display: contents; }      /* the badges and the timestamp are items of the same flex group as the name, so they wrap together and stay close */
+.emp-chevron { flex: none; color: var(--muted); display: inline-flex; transition: transform .15s; }
 .emp-card[open] .emp-chevron { transform: rotate(180deg); }
 .badge { display: inline-flex; align-items: center; min-block-size: 28px; padding-inline: 10px; border-radius: 999px; font-size: .875rem; font-weight: 600; border: 1px solid transparent; }
 .badge-ok { background: var(--accent-soft); color: var(--accent-text); }
@@ -322,11 +323,13 @@ main:focus { outline: none; }
 .emp-detail h3 { font-size: 1rem; margin-block: 8px 0; }
 .emp-detail p { margin: 0; }
 .emp-days { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.emp-day { display: grid; grid-template-columns: 8.75rem minmax(0, 1fr); align-items: start; gap: 4px 10px; padding-block: 4px; border-block-end: 1px solid var(--line); }
+/* two columns, one row per day: a fixed-width column for the weekday and date, a flexible one for the shifts */
+.emp-day { display: grid; grid-template-columns: 7rem minmax(0, 1fr); align-items: start; gap: 4px 10px; padding-block: 4px; border-block-end: 1px solid var(--line); }
 .emp-day:last-child { border-block-end: 0; }
-.emp-day-name { font-size: .9375rem; white-space: nowrap; }
-.emp-shifts { display: flex; flex-wrap: wrap; gap: 6px; min-inline-size: 0; }
-.emp-shift { white-space: nowrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: .875rem; }
+.emp-day-name { display: flex; justify-content: space-between; gap: 6px; font-size: .9375rem; white-space: nowrap; }
+.emp-day-d { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+.emp-shifts { display: flex; flex-wrap: wrap; gap: 4px 6px; min-inline-size: 0; }
+.emp-shift { white-space: nowrap; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: .875rem; }
 .examples { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; justify-items: center; }
 .examples li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 14px; max-inline-size: 100%; }
 .submission-status { font-weight: 700; color: var(--muted); }
@@ -361,9 +364,8 @@ dialog .dialog-actions { display: flex; justify-content: flex-end; padding: 0 20
 
 /* ---------- wider screens ---------- */
 @media (min-width: 768px) {
-  .emp-summary { grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) auto; }
-  .badges { grid-column: 2; grid-row: 1; }
-  .emp-chevron { grid-column: 3; }
+  .brand { gap: 6px; }
+  .emp-day { grid-template-columns: 9.5rem minmax(0, 1fr); }
   .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (min-width: 480px) {
