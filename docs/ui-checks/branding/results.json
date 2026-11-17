@@ -1,0 +1,103 @@
+{
+ "browser": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+ "base": "http://localhost:8000",
+ "runs": [
+  {
+   "vp": "360",
+   "scheme": "light",
+   "role": "manager",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "360",
+   "scheme": "light",
+   "role": "employee",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "360",
+   "scheme": "dark",
+   "role": "manager",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "360",
+   "scheme": "dark",
+   "role": "employee",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "390",
+   "scheme": "light",
+   "role": "manager",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "390",
+   "scheme": "light",
+   "role": "employee",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "390",
+   "scheme": "dark",
+   "role": "manager",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "390",
+   "scheme": "dark",
+   "role": "employee",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "768",
+   "scheme": "light",
+   "role": "manager",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "768",
+   "scheme": "light",
+   "role": "employee",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "768",
+   "scheme": "dark",
+   "role": "manager",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "768",
+   "scheme": "dark",
+   "role": "employee",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "1280",
+   "scheme": "light",
+   "role": "manager",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "1280",
+   "scheme": "light",
+   "role": "employee",
+   "accent": "#075B63"
+  },
+  {
+   "vp": "1280",
+   "scheme": "dark",
+   "role": "manager",
+   "accent": "#169D99"
+  },
+  {
+   "vp": "1280",
+   "scheme": "dark",
+   "role": "employee",
+   "accent": "#169D99"
+  }
+ ],
+ "failures": []
+}

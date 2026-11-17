@@ -49,7 +49,7 @@ def test_page_is_hebrew_rtl_and_mobile_ready():
     assert re.search(r'<html[^>]*\blang="he"', HTML) and re.search(r'<html[^>]*\bdir="rtl"', HTML)
     assert 'name="viewport" content="width=device-width, initial-scale=1' in HTML
     assert 'name="color-scheme" content="light dark"' in HTML
-    assert "<title>Smart Shift Copilot</title>" in HTML
+    assert "<title>Shiftimizer</title>" in HTML
     for landmark in ("<header", "<nav", "<main"):
         assert landmark in HTML
     assert 'class="skip"' in HTML and "<noscript>" in HTML and 'role="status"' in HTML
@@ -73,7 +73,7 @@ def test_no_inline_styles_or_scripts_so_a_strict_csp_is_possible():
 
 def test_product_name_is_english_everywhere_it_appears():
     s = _strings()
-    assert s["app"]["name"] == "Smart Shift Copilot"
+    assert s["app"]["name"] == "Shiftimizer"
 
 
 # ------------------------------------------------------------------ copy

@@ -108,7 +108,7 @@ def test_digest_endpoint_needs_secret(client, logged_in):
     assert client.post("/internal/digest").status_code == 401
     r = client.post("/internal/digest", headers={"X-Cron-Secret": "cron-test"})
     assert r.status_code == 200
-    assert r.json()["text"].startswith("Smart Shift Copilot —")
+    assert r.json()["text"].startswith("Shiftimizer —")
     assert r.json()["sent"] is False
 
 
@@ -116,4 +116,4 @@ def test_system_prompt_has_no_unfilled_placeholders(client, db):
     from app import agent as agent_module
 
     text = agent_module.build_system(db)[0]["text"]
-    assert "Smart Shift Copilot" in text and "{{" not in text
+    assert "Shiftimizer" in text and "{{" not in text

@@ -26,7 +26,7 @@
   --font: "Heebo", system-ui, -apple-system, "Segoe UI", Arial, "Noto Sans Hebrew", sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
 
-  /* light (default): warm neutrals, white cards, muted teal */
+  /* light (default): warm neutrals, white cards, Shiftimizer petrol teal (brand kit: petrol #075B63, vivid teal #169D99, aqua #80D9CE, gold #FFAD27, navy #031D2E) */
   --bg: #F6F3EE;
   --surface: #FFFFFF;
   --surface-2: #FBFAF7;
@@ -34,11 +34,13 @@
   --line-strong: #D3CCBF;
   --ink: #1E2A2D;
   --muted: #566265;
-  --accent: #2B7A78;
-  --accent-hover: #246967;
+  --accent: #075B63;          /* brand petrol: 7.8:1 with white text */
+  --accent-hover: #064B52;
   --accent-ink: #FFFFFF;
-  --accent-soft: #E3F0EE;
-  --accent-text: #20615F;
+  --accent-soft: #E3F4F1;
+  --accent-text: #075B63;
+  --brand-teal: #169D99;
+  --brand-gold: #FFAD27;
   --danger: #A63A2A;
   --danger-soft: #FBEAE6;
   --focus: #1D6C87;
@@ -60,11 +62,11 @@
     --line-strong: #3A494C;
     --ink: #E6EEEE;
     --muted: #A2B3B5;
-    --accent: #5DB7B0;
-    --accent-hover: #76C8C2;
-    --accent-ink: #082220;
-    --accent-soft: #1C3331;
-    --accent-text: #86D2CB;
+    --accent: #169D99;        /* brand vivid teal: 5.2:1 with the brand navy text */
+    --accent-hover: #22B3AE;
+    --accent-ink: #031D2E;
+    --accent-soft: #12383A;
+    --accent-text: #80D9CE;   /* brand aqua: 10:1 on the dark surface */
     --danger: #F2988A;
     --danger-soft: #3B2420;
     --focus: #7CC7DD;
@@ -151,8 +153,10 @@ p { margin: 0; }
 
 /* ---------- brand ---------- */
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; color: var(--ink); direction: ltr; unicode-bidi: isolate; }
-.brand-mark { inline-size: 32px; block-size: 32px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; }
-.brand-mark .icon { inline-size: 20px; block-size: 20px; }
+.brand-icon { inline-size: 32px; block-size: 32px; flex: none; display: block; }
+/* The approved full logo has a dark wordmark and no reversed version, so it always sits on a white plate (invisible on the white light-mode card). */
+.login-logo { background: #FFFFFF; border-radius: var(--radius-sm); padding: 10px 16px; display: grid; place-items: center; }
+.login-logo img { display: block; inline-size: min(100%, 17rem); block-size: auto; }
 
 /* ---------- cards ---------- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }

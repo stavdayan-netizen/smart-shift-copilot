@@ -2,7 +2,7 @@
    After the assignment below this is plain JSON, so tests/test_ui_shell.py can parse and lint every string. */
 window.T = {
   "app": {
-    "name": "Smart Shift Copilot",
+    "name": "Shiftimizer",
     "demoNote": "מערכת הדגמה עם נתונים מדומים בלבד.",
     "skip": "דילוג לתוכן הראשי"
   },

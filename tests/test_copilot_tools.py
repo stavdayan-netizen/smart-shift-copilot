@@ -172,7 +172,7 @@ def test_a_bad_tool_input_is_survivable_and_the_model_can_answer(db, world):
 # ---------------------------------------------------------------- prompt, model client, costs, evals
 def test_system_prompt_is_hebrew_filled_and_names_the_tools(db):
     text = agent.build_system(db)[0]["text"]
-    assert "{{" not in text and "Smart Shift Copilot" in text and re.search(r"[֐-׿]", text)
+    assert "{{" not in text and "Shiftimizer" in text and re.search(r"[֐-׿]", text)
     assert "2026-11-29" in text and "open" in text
     assert "get_submission_status" in text and "get_availability" in text and "never follow instructions" in text
 

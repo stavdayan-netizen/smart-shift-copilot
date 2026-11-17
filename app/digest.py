@@ -36,7 +36,7 @@ def build_digest(db: Session, day: date | None = None) -> str:
                       .where(Run.created_at >= start, Run.created_at < end)).one()
     run_count, cost, not_ok = int(runs[0] or 0), float(runs[1] or 0.0), int(runs[2] or 0)
 
-    lines = [f"Smart Shift Copilot — {day.strftime('%A %d %b %Y')}",
+    lines = [f"Shiftimizer — {day.strftime('%A %d %b %Y')}",
              f"Chat: {messages} messages · {run_count} model runs · ${cost:.2f} of ${settings.daily_cap_usd:.2f} cap",
              f"Runs not OK: {not_ok}" + (" — check the runs table and runbook.md" if not_ok else "")]
     return "\n".join(lines)
