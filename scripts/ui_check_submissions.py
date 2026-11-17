@@ -178,6 +178,7 @@ def main() -> int:
                 p = b.js(PROBE)
                 check(p["open"] == 1 and "משמרות שהוגשו" in p["detailText"] and "–" in p["detailText"], f"{tag}: expanding did not show shifts: {p['detailText'][:80]!r}")
                 check(p["openCardDays"] == 7 and all(r["besideOrAligned"] for r in p["openCardRows"]), f"{tag}: the seven day rows are not compact with the shifts beside each day: {p['openCardRows']}")
+                check("לא זמין/ה" in p["detailText"], f"{tag}: explicitly unavailable days must be shown as 'לא זמין/ה': {p['detailText'][:200]!r}")
                 check(p["openCardHasPrefs"], f"{tag}: an employee with preferences must show the preferences section")
                 check(not p["htmlInFreeText"], f"{tag}: free text was rendered as HTML")
                 b.js("document.querySelector('.emp-card[open]').scrollIntoView({block: 'start'})", False)

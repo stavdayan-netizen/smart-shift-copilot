@@ -12,7 +12,7 @@ from app.migrations import alembic_config, schema_status, upgrade_to_head
 from alembic import command
 
 EXPECTED_TABLES = {"users", "conversations", "messages", "runs", "audit_log", "login_throttle",
-                   "shifts", "availability_submissions", "availability_slots"}
+                   "shifts", "availability_submissions", "availability_slots", "availability_unavailable_days"}
 
 
 @pytest.fixture
@@ -159,4 +159,31 @@ def test_0004_drops_the_preference_columns_keeps_everything_else_and_downgrades(
     with eng.connect() as conn:
         assert {"pref_min", "pref_max"} <= {c["name"] for c in inspect(conn).get_columns("availability_submissions")}
         assert conn.execute(text("SELECT pref_min FROM availability_submissions")).scalar() is None
+    eng.dispose()
+
+
+def test_0005_adds_the_explicit_unavailable_days_table_keeps_existing_submissions_and_downgrades(tmp_path):
+    from sqlalchemy import text
+
+    if app_engine.dialect.name == "postgresql":
+        return  # the DDL is exercised on PostgreSQL by the upgrade/downgrade and model-drift tests; the row check is SQLite-only
+    url = f"sqlite:///{tmp_path / 'before5.db'}"
+    command.upgrade(alembic_config(url), "0004")
+    eng = create_engine(url)
+    with eng.begin() as conn:
+        conn.execute(text("INSERT INTO users (name, created_at, access_role, token_version) VALUES ('Five', '2026-01-01', 'employee', 0)"))
+        conn.execute(text("INSERT INTO shifts (name, start_time, end_time, sort_order, required_staff) VALUES ('בוקר', '08:00', '16:00', 1, 2)"))
+        conn.execute(text("INSERT INTO availability_submissions (user_id, week_start, free_text, submitted_at, updated_at) VALUES (1, '2026-11-29', 'old', '2026-11-20', '2026-11-20')"))
+        conn.execute(text("INSERT INTO availability_slots (submission_id, day, shift_id) VALUES (1, '2026-11-29', 1)"))
+    command.upgrade(alembic_config(url), "head")
+    with eng.connect() as conn:
+        cols = {c["name"] for c in inspect(conn).get_columns("availability_unavailable_days")}
+        assert cols == {"submission_id", "day"}
+        assert conn.execute(text("SELECT count(*) FROM availability_unavailable_days")).scalar() == 0          # nothing is assumed for old submissions
+        assert conn.execute(text("SELECT free_text FROM availability_submissions")).scalar() == "old"
+        assert conn.execute(text("SELECT count(*) FROM availability_slots")).scalar() == 1                      # the old slots are untouched
+    command.downgrade(alembic_config(url), "0004")
+    with eng.connect() as conn:
+        assert "availability_unavailable_days" not in inspect(conn).get_table_names()
+        assert conn.execute(text("SELECT count(*) FROM availability_slots")).scalar() == 1
     eng.dispose()

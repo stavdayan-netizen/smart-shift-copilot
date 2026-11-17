@@ -86,10 +86,40 @@ test("'כל המשמרות' resets an unavailable day and selects every shift of
   eq(other.off, { [MON]: true }, "other days keep their state");
 });
 
-test("on load, days without slots of an existing submission show as unavailable; before a first submission none do", () => {
-  const days = [SUN, MON, "2026-12-01"];
-  eq(M.offFromSlots([{ day: SUN, shift_id: 1 }], days, true), { [MON]: true, "2026-12-01": true });
-  eq(M.offFromSlots([], days, false), {});
+test("saved unavailable days are loaded as they were saved; an empty day is never assumed unavailable", () => {
+  eq(M.offFromDays(["2026-12-01", "2026-12-04"]), { "2026-12-01": true, "2026-12-04": true });
+  eq(M.offFromDays([]), {}); eq(M.offFromDays(undefined), {});
+  const days = ["2026-11-29", "2026-11-30", "2026-12-01"];
+  const sel = M.fromSlots([{ day: "2026-11-29", shift_id: 1 }]);
+  eq(M.missingDays(sel, M.offFromDays([]), days), ["2026-11-30", "2026-12-01"], "a legacy submission: the empty days still need a choice");
+});
+
+test("every day needs a choice: missing days are the days with neither a shift nor an explicit 'unavailable'", () => {
+  const days = ["2026-11-29", "2026-11-30", "2026-12-01", "2026-12-02"];
+  let sel = {}, off = {};
+  eq(M.missingDays(sel, off, days), days);
+  sel = M.toggle(sel, "2026-11-29", 1);                              // a shift
+  off = M.toggleOff(sel, off, "2026-12-01").off;                     // explicit unavailable
+  eq(M.missingDays(sel, off, days), ["2026-11-30", "2026-12-02"]);
+  const r = M.toggleOff(sel, off, "2026-12-01");                     // a second click: back to untouched, not unavailable
+  eq(M.missingDays(r.sel, r.off, days), ["2026-11-30", "2026-12-01", "2026-12-02"]);
+  const clearedShift = M.toggle(sel, "2026-11-29", 1, false);       // unticking the only shift leaves the day untouched
+  eq(M.missingDays(clearedShift, off, days)[0], "2026-11-29");
+  eq(M.missingDays(M.selectAllDay(sel, off, "2026-12-01", [{ id: 1 }, { id: 2 }]).sel, M.selectAllDay(sel, off, "2026-12-01", [{ id: 1 }]).off, days), ["2026-11-30", "2026-12-02"]);
+});
+
+test("the unavailable days sent to the server are the marked days of the week, in week order", () => {
+  const days = ["2026-11-29", "2026-11-30", "2026-12-01"];
+  eq(M.unavailableList({ "2026-12-01": true, "2026-11-29": true, "2027-01-01": true }, days), ["2026-11-29", "2026-12-01"]);
+  eq(M.unavailableList({}, days), []);
+});
+
+test("changing only the unavailable days makes the form dirty; identical sets do not", () => {
+  const saved = { sel: M.fromSlots([{ day: SUN, shift_id: 1 }]), text: "", off: { [MON]: true } };
+  eq(M.isDirty(saved.sel, "", saved, { [MON]: true }), false);
+  eq(M.isDirty(saved.sel, "", saved, {}), true);
+  eq(M.isDirty(saved.sel, "", saved, { [MON]: true, "2026-12-01": true }), true);
+  eq(M.isDirty(saved.sel, "", { sel: saved.sel, text: "" }, {}), false, "no saved off set equals none");
 });
 
 test("approved leave dates are grouped into consecutive ranges", () => {

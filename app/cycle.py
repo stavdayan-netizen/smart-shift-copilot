@@ -23,6 +23,14 @@ from typing import Callable, Literal
 
 from zoneinfo import ZoneInfo
 
+HEBREW_WEEKDAYS = ["יום שני", "יום שלישי", "יום רביעי", "יום חמישי", "יום שישי", "יום שבת", "יום ראשון"]  # date.weekday(): Monday = 0
+
+
+def weekday_he(d: date) -> str:
+    """The Hebrew weekday name of a date, computed in code so nobody (not even the model) has to work it out."""
+    return HEBREW_WEEKDAYS[d.weekday()]
+
+
 TZ = ZoneInfo("Asia/Jerusalem")  # fixed by the product rules; deliberately not the TIMEZONE setting
 UTC = timezone.utc
 DEADLINE_TIME = time(22, 0)

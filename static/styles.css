@@ -267,6 +267,10 @@ main:focus { outline: none; }
 .day-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .day-card { margin: 0; min-inline-size: 0; padding: 14px 16px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 12px; }
 .day-card.has-selection { border-color: var(--accent); }
+.day-card { scroll-margin-block: 72px 140px; }
+.day-card.is-unset { border-style: dashed; border-color: var(--line-strong); }
+.day-card.has-error { border-style: solid; border-color: var(--danger); background: var(--danger-soft); }
+.day-card.has-error .day-count { color: var(--danger); font-weight: 700; }
 .day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .day-head h3 { font-size: 1.0625rem; }
 .day-count { font-size: .875rem; }

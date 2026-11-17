@@ -59,6 +59,12 @@ PROBE = r"""
     status: txt('#submission-status'),
     statusInBar: !!document.querySelector('.submit-bar #submission-status'),
     firstCardOff: !!document.querySelector('.day-card.is-off'),
+    unsetCards: q('.day-card.is-unset').length, offCards: q('.day-card.is-off').length, errorCards: q('.day-card.has-error').map((c) => c.id),
+    slotsError: (document.getElementById('slots-error') && !document.getElementById('slots-error').hidden) ? document.getElementById('slots-error').innerText : '',
+    legacyNotice: txt('#legacy-notice'),
+    focusedDay: (document.activeElement && document.activeElement.closest('.day-card')) ? document.activeElement.closest('.day-card').id : '',
+    firstErrorInView: (() => { const c = document.querySelector('.day-card.has-error'); if (!c) return null; const r = c.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; })(),
+    dayCounts: q('.day-card .day-count').map((n) => n.textContent),
     layout: q('.day-card').map((c) => {
       const r = c.getBoundingClientRect(), k = c.querySelector('.checks').getBoundingClientRect(), s = c.querySelector('.shortcuts').getBoundingClientRect();
       return { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), checksTop: Math.round(k.top), checksBottom: Math.round(k.bottom),
@@ -146,6 +152,11 @@ def run(args) -> int:
         js(f"document.querySelectorAll('.day-card')[{day_index}].querySelectorAll('.shortcuts .btn')[{which}].click()", False)
         settle(0.25)
 
+    def finish_days():
+        """Give every day without a choice the explicit choice 'לא זמין/ה' (the form refuses to save otherwise)."""
+        js("document.querySelectorAll('.day-card.is-unset').forEach((c) => c.querySelector('[data-role=none]').click())", False)
+        settle(0.3)
+
     def set_text(text):
         js(f"(() => {{ const t = document.getElementById('free-text'); t.value = {json.dumps(text)}; t.dispatchEvent(new Event('input', {{bubbles: true}})); }})()", False)
         settle(0.25)
@@ -165,15 +176,23 @@ def run(args) -> int:
                 expect(p["h1"] == HEADING, f"{vp}/{scheme}: heading is {p['h1']!r}")
                 expect(p["dayCards"] == 7 and p["shortcutButtons"] == 14 and p["checkboxes"] == 14, f"{vp}/{scheme}: form structure {p}")
                 expect(DEADLINE_A in p["bodyText"] and FREE_NOTICE in p["bodyText"], f"{vp}/{scheme}: the one-line deadline notice or the free-text notice is missing")
-                expect(EDIT_UNTIL not in p["bodyText"] and "נותר" not in p["bodyText"], f"{vp}/{scheme}: the old edit-until line or a countdown is still shown")
+                expect(EDIT_UNTIL not in p["bodyText"] and "נותר:" not in p["bodyText"], f"{vp}/{scheme}: the old edit-until line or a countdown is still shown")
                 expect(INSTRUCTION in p["bodyText"] and FREE_HELP in p["bodyText"], f"{vp}/{scheme}: instruction or free-text example is wrong")
                 expect(p["chips"] == 0, f"{vp}/{scheme}: status badges are still shown")
                 expect(p["statusInBar"] and p["status"] == "טרם הוגשה", f"{vp}/{scheme}: submission status next to the submit button is {p['status']!r}")
                 lay = p["layout"]
                 expect(len(lay) == 7 and all(lay[i]["top"] < lay[i + 1]["top"] and lay[i]["left"] == lay[0]["left"] and lay[i]["width"] == lay[0]["width"] for i in range(6)), f"{vp}/{scheme}: day cards are not stacked one per row")
                 expect(all(c["shortcutsTop"] < c["checksBottom"] and (c["shortcutsRight"] <= c["checksLeft"] or c["shortcutsLeft"] >= c["checksRight"]) for c in lay), f"{vp}/{scheme}: 'כל המשמרות' / 'לא זמין/ה' are not beside the shift choices")
-                expect(p["saveDisabled"] is True and "לפחות משמרת אחת" in p["help"], f"{vp}/{scheme}: empty form must not be submittable")
-                record(vp, scheme, "form-empty", note="open window, nothing selected, submit disabled", expected=("/api/me",))
+                expect(p["unsetCards"] == 7 and p["offCards"] == 0, f"{vp}/{scheme}: untouched days must be distinct from unavailable ones: {p['unsetCards']} untouched, {p['offCards']} unavailable")
+                expect(set(p["dayCounts"]) == {"לא נבחרה זמינות"}, f"{vp}/{scheme}: untouched days must say so: {p['dayCounts']}")
+                expect(p["saveDisabled"] is False and "נותרו 7" in p["help"], f"{vp}/{scheme}: the empty form can be submitted to get the explanation: {p['help']!r}")
+                record(vp, scheme, "form-empty", note="open window, nothing chosen: every day untouched", expected=("/api/me",))
+                click("#btn-save")
+                settle(0.9)
+                p = probe()
+                expect(p["slotsError"].strip() == "יש לבחור זמינות בימים: יום ראשון, יום שני, יום שלישי, יום רביעי, יום חמישי, יום שישי, יום שבת", f"{vp}/{scheme}: the blocked save must name all seven days: {p['slotsError']!r}")
+                expect(len(p["errorCards"]) == 7 and p["focusedDay"] == p["errorCards"][0] and p["firstErrorInView"], f"{vp}/{scheme}: all seven days marked, focus and scroll on the first: {p['errorCards']} {p['focusedDay']} {p['firstErrorInView']}")
+                record(vp, scheme, "form-blocked-all-days", note="save blocked: the message names all seven days and every day is marked")
                 if full:
                     # the shortcuts and single checkboxes
                     day_button(0, 0)
@@ -212,6 +231,15 @@ def run(args) -> int:
                     settle(0.3)
                     record(vp, scheme, "form-filled", note="three days selected, free text entered (scrolled to the free-text field)")
                     click("#btn-save")
+                    settle(0.9)
+                    p = probe()
+                    expect(p["slotsError"].startswith("יש לבחור זמינות ב") and p["status"] == "טרם הוגשה", f"{vp}: an incomplete form must not save: {p['slotsError']!r} {p['status']!r}")
+                    expect(len(p["errorCards"]) == p["unsetCards"] and p["focusedDay"] == p["errorCards"][0] and p["firstErrorInView"], f"{vp}: the first incomplete day must be scrolled to and focused: {p['errorCards']} {p['focusedDay']}")
+                    record(vp, scheme, "form-blocked-some-days", note="three days chosen, the others untouched: the message names the missing days and marks them")
+                    finish_days()
+                    p = probe()
+                    expect(p["slotsError"] == "" and not p["errorCards"] and p["unsetCards"] == 0 and p["offCards"] == 4, f"{vp}: choosing the remaining days must clear the message: {p['slotsError']!r} {p['errorCards']} off={p['offCards']}")
+                    click("#btn-save")
                     settle(1.5)
                     p = probe()
                     expect("נשמרה" in p["note"] and p["status"].startswith("הוגשה"), f"{vp}: save not confirmed: {p['note']!r} {p['status']!r}")
@@ -219,7 +247,7 @@ def run(args) -> int:
                     # reload keeps it; editing then saving updates it
                     fresh(args.a, w, h, mobile, scheme, clear=False)
                     p = probe()
-                    expect(p["checked"] == 5 and p["status"].startswith("הוגשה") and p["firstCardOff"], f"{vp}: saved submission not shown after reload (a saved day without shifts shows as unavailable): {p['checked']} {p['status']!r}")
+                    expect(p["checked"] == 5 and p["status"].startswith("הוגשה") and p["offCards"] == 4 and p["unsetCards"] == 0 and p["legacyNotice"] == "", f"{vp}: the saved selections (shifts and explicit unavailable days) must be restored: {p['checked']} off={p['offCards']} unset={p['unsetCards']} {p['status']!r}")
                     day_button(4, 1)
                     expect("שלא נשמרו" in probe()["help"], f"{vp}: unsaved changes not indicated")
                     click("#btn-save")
@@ -228,6 +256,7 @@ def run(args) -> int:
                 else:
                     day_button(0, 0)
                     set_text("בקשה קצרה")
+                    finish_days()
                     click("#btn-save")
                     settle(1.2)
                     record(vp, scheme, "form-saved")
@@ -240,7 +269,7 @@ def run(args) -> int:
                 # ---- C: the next window is open; last week's submission stays below as a read-only summary
                 fresh(args.c, w, h, mobile, scheme, clear=False)
                 p = probe()
-                expect(p["hasForm"] and p["locked"] and p["saveDisabled"], f"{vp}/{scheme}: open form with locked summary expected")
+                expect(p["hasForm"] and p["locked"] and p["unsetCards"] == 7 and "נותרו 7" in p["help"], f"{vp}/{scheme}: open form with locked summary and seven untouched days expected")
                 expect(DEADLINE_C in p["bodyText"], f"{vp}/{scheme}: the deadline line for the next week is wrong")
                 record(vp, scheme, "open-next-week-with-locked", note="new week form, previous week locked below")
                 b.call("Network.clearBrowserCookies")

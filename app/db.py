@@ -153,6 +153,7 @@ class AvailabilitySubmission(Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     slots: Mapped[list["AvailabilitySlot"]] = relationship(back_populates="submission", cascade="all, delete-orphan")
+    unavailable_days: Mapped[list["AvailabilityUnavailableDay"]] = relationship(back_populates="submission", cascade="all, delete-orphan")
     # (no passive_deletes: SQLite does not enforce ON DELETE CASCADE, so the ORM deletes the slots itself;
     #  PostgreSQL also has the database-level cascade for deletes that bypass the ORM)
 
@@ -167,6 +168,15 @@ class AvailabilitySlot(Base):
     day: Mapped[date] = mapped_column(Date)
     shift_id: Mapped[int] = mapped_column(ForeignKey("shifts.id"), index=True)
     submission: Mapped[AvailabilitySubmission] = relationship(back_populates="slots")
+
+
+class AvailabilityUnavailableDay(Base):
+    """A day the employee explicitly marked "לא זמין/ה". A day with neither a slot nor a row here was never chosen (legacy submissions)."""
+
+    __tablename__ = "availability_unavailable_days"
+    submission_id: Mapped[int] = mapped_column(ForeignKey("availability_submissions.id", ondelete="CASCADE"), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    submission: Mapped[AvailabilitySubmission] = relationship(back_populates="unavailable_days")
 
 
 # ---------------------------------------------------------------------------
