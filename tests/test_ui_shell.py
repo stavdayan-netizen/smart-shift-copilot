@@ -442,3 +442,20 @@ def test_filter_cards_are_four_in_a_row_on_desktop_and_two_by_two_on_mobile_with
 
 def test_collapsed_card_timestamp_label_is_last_update():
     assert _strings()["submissions"]["updated"] == "עדכון אחרון: {when}"
+
+
+# ------------------------------------------------------------------ every day needs an explicit choice (form)
+def test_the_form_requires_a_choice_for_every_day_and_names_the_missing_days():
+    a = _strings()["availability"]
+    assert a["missingOne"] == "יש לבחור זמינות ב{day}" and a["missingMany"] == "יש לבחור זמינות בימים: {days}"
+    assert a["notChosen"] == "לא נבחרה זמינות" and a["none"] == "לא זמין/ה"
+    code = _strip_js_comments(APP_JS)
+    assert "AM.missingDays(avail.sel, avail.off, avail.data.week.days)" in code.split("async function saveAvailability")[1].split("// ---- manager")[0]
+    assert "unavailable_days: AM.unavailableList(avail.off, avail.data.week.days)" in code                      # the explicit days are sent
+    assert "function flagMissingDays" in code and "scrollIntoView" in code and "first.focus(" in code            # scroll to and focus the first incomplete day
+    assert 'card.classList.toggle("is-unset"' in code and 'card.classList.toggle("has-error"' in code            # three distinct day states
+    assert "AM.offFromDays(" in code and "offFromSlots" not in code                                              # an empty day is never assumed unavailable
+    assert "legacy-notice" in code                                                                               # older submissions explain which days need a choice
+    # an incomplete form can still be submitted so the click explains it; only an over-long text or a clean form disables the button
+    assert 'submit.disabled = avail.busy || probs.includes("text_too_long") || (!!d.submission && !dirty)' in code
+    assert ".day-card.is-unset" in CSS and ".day-card.has-error" in CSS and "prefers-reduced-motion" in code

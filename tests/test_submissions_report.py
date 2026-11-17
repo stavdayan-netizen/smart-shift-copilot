@@ -190,7 +190,9 @@ def test_counts_order_and_timestamps_follow_new_submissions_and_edits(world, db)
         return c
 
     def save(client, *pairs, text=None):
-        body = {"week_start": WEEK.isoformat(), "slots": [{"day": (WEEK + timedelta(days=d)).isoformat(), "shift_id": ids[n]} for d, n in pairs], "free_text": text}
+        chosen = {d for d, _ in pairs}
+        body = {"week_start": WEEK.isoformat(), "slots": [{"day": (WEEK + timedelta(days=d)).isoformat(), "shift_id": ids[n]} for d, n in pairs],
+                "unavailable_days": [(WEEK + timedelta(days=d)).isoformat() for d in range(7) if d not in chosen], "free_text": text}
         assert client.put("/api/availability", json=body).status_code == 200
 
     m = manager()
@@ -211,3 +213,20 @@ def test_counts_order_and_timestamps_follow_new_submissions_and_edits(world, db)
     a2 = row(rep2, emps["A"][0])
     assert a2["updated_at"] > t_a and len(a2["days"]) == 2
     assert rep2["counts"] == rep["counts"]                                                                           # an edit does not change the counts
+
+
+def test_the_report_distinguishes_explicit_unavailable_days_from_untouched_ones(world, db):
+    ids = {s.name: s.id for s in db.scalars(select(Shift)).all()}
+    new = create_employee(db, f"Choice{uuid.uuid4().hex[:6]}")[0]
+    with SessionLocal() as s:
+        from app.db import AvailabilityUnavailableDay
+        sub = AvailabilitySubmission(user_id=new.id, week_start=WEEK)
+        sub.slots = [AvailabilitySlot(day=WEEK, shift_id=ids["בוקר"])]
+        sub.unavailable_days = [AvailabilityUnavailableDay(day=WEEK + timedelta(days=1)), AvailabilityUnavailableDay(day=WEEK + timedelta(days=2))]
+        s.add(sub)
+        s.commit()
+    rep = manager().get("/api/submissions").json()
+    mine = next(r for r in rep["employees"] if r["id"] == new.id)
+    assert mine["unavailable_days"] == ["2026-11-30", "2026-12-01"]                      # explicitly "לא זמין/ה"; days 3-6 were never chosen
+    assert row(rep, world["Anna"])["unavailable_days"] == []                              # an older submission without explicit days
+    assert next(r for r in rep["employees"] if r["status"] == "missing")["unavailable_days"] == []

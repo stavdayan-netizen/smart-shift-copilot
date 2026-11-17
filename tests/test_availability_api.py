@@ -56,10 +56,14 @@ def new_employee(db, name=None):
     return c, user
 
 
-def body(shifts, *pairs, text=None, week=OPEN_WEEK):
-    """pairs: (days after the week's Sunday, 'בוקר'|'ערב')."""
+def body(shifts, *pairs, text=None, week=OPEN_WEEK, off="rest"):
+    """pairs: (days after the week's Sunday, 'בוקר'|'ערב'). `off`: the days marked "לא זמין/ה" as day offsets; the default "rest" marks every day
+    without a shift, i.e. a complete submission (every day needs an explicit choice); pass [] or a list to test incomplete ones."""
+    chosen = {d for d, _ in pairs}
+    off_days = [d for d in range(7) if d not in chosen] if off == "rest" else off
     return {"week_start": week.isoformat(),
             "slots": [{"day": (week + timedelta(days=d)).isoformat(), "shift_id": shifts[name]} for d, name in pairs],
+            "unavailable_days": [(week + timedelta(days=d)).isoformat() for d in off_days],
             "free_text": text}
 
 
@@ -302,8 +306,8 @@ def test_each_save_writes_one_audit_row_with_counts_only(db, shifts, monkeypatch
     with SessionLocal() as s:
         rows = s.scalars(select(AuditLog).where(AuditLog.actor_id == user.id, AuditLog.action == "availability.submitted").order_by(AuditLog.id)).all()
     assert [r.after_json for r in rows] == [
-        {"week_start": "2026-11-29", "slots": 2, "has_free_text": True, "created": True},
-        {"week_start": "2026-11-29", "slots": 1, "has_free_text": False, "created": False}]
+        {"week_start": "2026-11-29", "slots": 2, "unavailable_days": 5, "has_free_text": True, "created": True},
+        {"week_start": "2026-11-29", "slots": 1, "unavailable_days": 6, "has_free_text": False, "created": False}]
     assert SECRET_TEXT not in str([r.after_json for r in rows]) and all(r.request_id for r in rows)
     events = log_lines.events("availability_submitted")
     assert [(e["slots"], e["has_free_text"], e["free_text_len"], e["created"]) for e in events] == [(2, True, len(SECRET_TEXT), True), (1, False, 0, False)]
@@ -360,3 +364,87 @@ def test_no_shifts_configured_is_a_clear_hebrew_error(db, monkeypatch):
 def test_all_form_messages_are_hebrew():
     assert all(HEBREW.search(m) for m in availability.MESSAGES.values())
     assert availability.FREE_TEXT_MAX == 1000
+
+
+# ------------------------------------------------------------------ every day needs an explicit choice
+def test_a_day_without_a_choice_blocks_the_save_and_is_named(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    r = emp.put("/api/availability", json=body(shifts, (0, "בוקר"), off=[1, 2, 3, 5, 6]))        # Thursday (4) was never touched
+    assert r.status_code == 422
+    assert r.json()["errors"] == [{"field": "days", "message": "יש לבחור זמינות ביום חמישי"}] and r.json()["detail"] == "יש לבחור זמינות ביום חמישי"
+    assert saved_rows(user.id) == []
+
+
+def test_every_missing_day_is_named_in_week_order(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    r = emp.put("/api/availability", json=body(shifts, (2, "ערב"), off=[1]))                      # Sunday, Wednesday..Saturday untouched
+    assert r.json()["errors"] == [{"field": "days", "message": "יש לבחור זמינות בימים: יום ראשון, יום רביעי, יום חמישי, יום שישי, יום שבת"}]
+    r = emp.put("/api/availability", json={"week_start": OPEN_WEEK.isoformat(), "slots": []})      # no unavailable_days at all: all seven are named
+    assert r.status_code == 422 and r.json()["errors"][0]["message"].startswith("יש לבחור זמינות בימים: יום ראשון, יום שני") and r.json()["errors"][0]["message"].endswith("יום שבת")
+    assert saved_rows(user.id) == []
+
+
+def test_a_day_cannot_be_both_unavailable_and_have_shifts_and_days_must_be_in_the_week(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    both = body(shifts, (0, "בוקר"), off=[0, 1, 2, 3, 4, 5, 6])
+    r = emp.put("/api/availability", json=both)
+    assert r.status_code == 422 and r.json()["errors"] == [{"field": "days", "message": availability.conflict_message(OPEN_WEEK)}]
+    outside = {**body(shifts, (0, "בוקר")), "unavailable_days": [(OPEN_WEEK + timedelta(days=d)).isoformat() for d in range(1, 7)] + ["2026-12-06"]}
+    assert emp.put("/api/availability", json=outside).json()["detail"] == availability.MESSAGES["bad_day"]
+    dup = {**body(shifts, (0, "בוקר")), "unavailable_days": [(OPEN_WEEK + timedelta(days=d)).isoformat() for d in (1, 1, 2, 3, 4, 5, 6)]}
+    assert emp.put("/api/availability", json=dup).json()["detail"] == availability.MESSAGES["duplicate_day"]
+    assert saved_rows(user.id) == []
+
+
+def test_seven_unavailable_days_is_still_a_zero_shift_submission_and_refused(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    r = emp.put("/api/availability", json=body(shifts))                                            # all seven days explicitly "לא זמין/ה"
+    assert r.status_code == 422 and r.json()["errors"] == [{"field": "slots", "message": availability.MESSAGES["no_slots"]}]
+    assert saved_rows(user.id) == []
+
+
+def test_unavailable_days_are_saved_returned_and_replaced_on_edit(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    saved = emp.put("/api/availability", json=body(shifts, (0, "בוקר"), (1, "ערב"))).json()["submission"]
+    assert saved["unavailable_days"] == [(OPEN_WEEK + timedelta(days=d)).isoformat() for d in (2, 3, 4, 5, 6)]
+    again = emp.get("/api/availability").json()["submission"]
+    assert again["unavailable_days"] == saved["unavailable_days"] and len(again["slots"]) == 2     # nothing lost on load
+    edited = emp.put("/api/availability", json=body(shifts, (0, "בוקר"), (2, "ערב"), (5, "בוקר"))).json()["submission"]
+    assert edited["unavailable_days"] == [(OPEN_WEEK + timedelta(days=d)).isoformat() for d in (1, 3, 4, 6)]
+    assert emp.get("/api/availability").json()["submission"]["unavailable_days"] == edited["unavailable_days"]
+    with SessionLocal() as s:
+        from app.db import AvailabilityUnavailableDay
+        sub = s.scalar(select(AvailabilitySubmission).where(AvailabilitySubmission.user_id == user.id))
+        assert sorted(u.day for u in sub.unavailable_days) == [OPEN_WEEK + timedelta(days=d) for d in (1, 3, 4, 6)]
+
+
+def test_a_submission_saved_before_the_explicit_choice_is_kept_and_its_empty_days_are_not_assumed(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    with SessionLocal() as s:                                                                      # a legacy row: slots only, no explicit days
+        sub = AvailabilitySubmission(user_id=user.id, week_start=OPEN_WEEK, free_text="ישן")
+        sub.slots = [AvailabilitySlot(day=OPEN_WEEK, shift_id=shifts["בוקר"]), AvailabilitySlot(day=OPEN_WEEK + timedelta(days=3), shift_id=shifts["ערב"])]
+        s.add(sub)
+        s.commit()
+    got = emp.get("/api/availability").json()["submission"]
+    assert len(got["slots"]) == 2 and got["free_text"] == "ישן" and got["unavailable_days"] == []   # untouched days stay untouched
+    # re-saving the same selections without choosing the other days is refused and names exactly those days
+    r = emp.put("/api/availability", json=body(shifts, (0, "בוקר"), (3, "ערב"), off=[]))
+    assert r.status_code == 422 and r.json()["errors"][0]["message"] == "יש לבחור זמינות בימים: יום שני, יום שלישי, יום חמישי, יום שישי, יום שבת"
+    assert len(saved_rows(user.id)[0][1]) == 2                                                    # the legacy data is untouched
+    ok = emp.put("/api/availability", json=body(shifts, (0, "בוקר"), (3, "ערב"), text="ישן"))
+    assert ok.status_code == 200 and len(ok.json()["submission"]["unavailable_days"]) == 5
+
+
+def test_the_audit_row_counts_unavailable_days_and_never_lists_them(db, shifts, monkeypatch):
+    freeze_open(monkeypatch)
+    emp, user = new_employee(db)
+    assert emp.put("/api/availability", json=body(shifts, (0, "בוקר"), (1, "ערב"))).status_code == 200
+    with SessionLocal() as s:
+        row = s.scalars(select(AuditLog).where(AuditLog.actor_id == user.id, AuditLog.action == "availability.submitted")).all()[-1]
+    assert row.after_json["unavailable_days"] == 5 and "2026-12" not in str(row.after_json)                  # a count, never the days

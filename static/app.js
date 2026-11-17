@@ -198,7 +198,7 @@
   }
 
   // ---- employee: the availability form (spec.md section 5)
-  const avail = { data: null, sel: {}, off: {}, text: "", saved: { sel: {}, text: "" }, skew: 0, timer: null, inputs: {}, busy: false, notice: "", lost: false };
+  const avail = { data: null, sel: {}, off: {}, flagged: false, text: "", saved: { sel: {}, text: "" }, skew: 0, timer: null, inputs: {}, busy: false, notice: "", lost: false };
   const fmtDay = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
   const fmtDate = (iso, year) => new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
   const fmtWhen = (iso) => new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Jerusalem" }).format(new Date(iso));
@@ -226,7 +226,7 @@
     if (avail.timer) { clearInterval(avail.timer); avail.timer = null; }
     window.onbeforeunload = null;
   }
-  const isDirty = () => AM.isDirty(avail.sel, avail.text, avail.saved);
+  const isDirty = () => AM.isDirty(avail.sel, avail.text, avail.saved, avail.off);
 
   async function renderAvailability(main) {
     avail.inputs = {}; avail.notice = ""; avail.busy = false;
@@ -242,8 +242,8 @@
       avail.data = data;
       avail.skew = Date.parse(data.cycle.now) - Date.now();
       const mine = data.submission;
-      avail.saved = { sel: AM.fromSlots(mine ? mine.slots : []), text: mine && mine.free_text ? mine.free_text : "" };
-      if (first || !isDirty() || !data.editable) { avail.sel = AM.fromSlots(mine ? mine.slots : []); avail.text = avail.saved.text; avail.off = AM.offFromSlots(mine ? mine.slots : [], data.week.days, !!mine); }
+      avail.saved = { sel: AM.fromSlots(mine ? mine.slots : []), text: mine && mine.free_text ? mine.free_text : "", off: AM.offFromDays(mine ? mine.unavailable_days : []) };
+      if (first || !isDirty() || !data.editable) { avail.sel = AM.fromSlots(mine ? mine.slots : []); avail.text = avail.saved.text; avail.off = AM.offFromDays(mine ? mine.unavailable_days : []); avail.flagged = false; }
       drawAvailability();
     } catch (e) {
       if (!$("avail-body")) return;
@@ -276,6 +276,7 @@
       return el("li", {}, el("strong", { text: fmtDay(day) + ", " + fmtDate(day) }), " · ", names.join(", "));
     }));
     const card = el("section", { class: "card locked-card" }, el("h2", { text: A.lockedTitle }), el("p", { class: "muted", text: fmt(A.lockedWeek, { start: fmtDate(locked.week_start), end: fmtDate(locked.week_end, true) }) }), list);
+    if ((sub.unavailable_days || []).length) card.append(el("p", { class: "muted", text: fmt(A.lockedUnavailable, { days: sub.unavailable_days.map(fmtDay).join(", ") }) }));
     if (sub.free_text) card.append(el("h3", { text: A.lockedRequests }), el("p", { class: "free-text", dir: "auto", text: sub.free_text }));
     card.append(el("div", { class: "notice notice-info" }, icon("info"), el("span", { text: A.lockedNote })));
     return card;
@@ -330,7 +331,10 @@
         el("div", { class: "day-body" }, el("div", { class: "checks" }, checks), el("div", { class: "shortcuts" }, all, none))));
     });
     const slotsError = el("div", { class: "notice notice-error", id: "slots-error", role: "alert", hidden: true });
-    const daysCard = el("section", { class: "stack" }, el("h2", { text: A.daysTitle }), el("p", { class: "muted", text: A.daysHelp }), slotsError, days);
+    // A submission saved before every day needed a choice keeps its shifts; its empty days are not assumed to be anything.
+    const unchosen = d.submission ? AM.missingDays(avail.saved.sel, avail.saved.off, d.week.days) : [];
+    const legacy = unchosen.length ? el("div", { class: "notice notice-info", id: "legacy-notice" }, icon("info"), el("span", { text: fmt(A.legacyNotice, { days: unchosen.map(fmtDay).join(", ") }) })) : "";
+    const daysCard = el("section", { class: "stack" }, el("h2", { text: A.daysTitle }), el("p", { class: "muted", text: A.daysHelp }), legacy, slotsError, days);
 
     const ta = el("textarea", { class: "input", id: "free-text", rows: "4", dir: "auto", "aria-describedby": "free-help free-notice free-count", maxlength: "5000" });
     ta.value = avail.text;
@@ -363,22 +367,29 @@
       const off = AM.isOff(avail.off, day);
       d.shifts.forEach((sh) => { const i = avail.inputs[AM.key(day, sh.id)]; if (i) { i.checked = AM.has(avail.sel, day, sh.id); i.disabled = off; } });
       const n = AM.countDay(avail.sel, day), node = $("count-" + day);
-      if (node) node.textContent = off ? A.none : (n ? fmt(A.selectedCount, { n }) : A.noneSelected);
+      if (node) node.textContent = off ? A.none : (n ? fmt(A.selectedCount, { n }) : A.notChosen);
       const card = $("day-" + day);
       if (card) {
-        card.classList.toggle("has-selection", n > 0); card.classList.toggle("is-off", off);
+        card.classList.toggle("has-selection", n > 0); card.classList.toggle("is-off", off); card.classList.toggle("is-unset", n === 0 && !off);
+        const flagged = avail.flagged && n === 0 && !off;      // after a blocked save, the days still without a choice are marked
+        card.classList.toggle("has-error", flagged); card.setAttribute("aria-invalid", flagged ? "true" : "false");
         const noneBtn = card.querySelector('[data-role="none"]'); if (noneBtn) { noneBtn.setAttribute("aria-pressed", off ? "true" : "false"); noneBtn.classList.toggle("is-active", off); }
       }
     });
     const len = AM.textLength(avail.text), counter = $("free-count");
     if (counter) { counter.textContent = fmt(A.counter, { n: len.toLocaleString("he-IL"), max: AM.TEXT_MAX.toLocaleString("he-IL") }); counter.classList.toggle("over", len > AM.TEXT_MAX); }
     const dirty = isDirty(), probs = AM.problems(avail.sel, avail.text), submit = $("btn-save");
+    const missing = AM.missingDays(avail.sel, avail.off, d.week.days);
+    if (avail.flagged) {                                    // keep the blocked-save message current while the employee fixes the days
+      if (missing.length) showFieldError("slots-error", missingDaysMessage(missing)); else { avail.flagged = false; showFieldError("slots-error", ""); }
+    }
     if (dirty) avail.notice = "";   // the "saved" message is about the previous version
     submit.replaceChildren(avail.busy ? el("span", { class: "spinner", "aria-hidden": "true" }) : "", el("span", { text: avail.busy ? A.saving : (d.submission ? A.update : A.save) }));
-    submit.disabled = avail.busy || probs.length > 0 || (!!d.submission && !dirty);
+    // An incomplete form can still be submitted: the click explains which days are missing (and scrolls to the first).
+    submit.disabled = avail.busy || probs.includes("text_too_long") || (!!d.submission && !dirty);
     const help = $("save-help");
-    help.textContent = AM.count(avail.sel) === 0 ? A.needOne : (dirty ? A.unsaved : "");
-    help.classList.toggle("dirty", dirty && AM.count(avail.sel) > 0);
+    help.textContent = missing.length ? fmt(A.daysLeft, { n: missing.length }) : (AM.count(avail.sel) === 0 ? A.needOne : (dirty ? A.unsaved : ""));
+    help.classList.toggle("dirty", dirty && !missing.length && AM.count(avail.sel) > 0);
     const left = d.limits.saves_left;
     if (left <= 5 && !avail.notice) help.textContent = (help.textContent ? help.textContent + " " : "") + fmt(A.savesLeft, { n: left });
     $("save-note").textContent = avail.notice;
@@ -391,26 +402,46 @@
     if (message) box.append(icon("alert"), el("span", { text: message }));
   }
 
+  const missingDaysMessage = (days) => days.length === 1
+    ? fmt(T.availability.missingOne, { day: fmtDay(days[0]) })
+    : fmt(T.availability.missingMany, { days: days.map(fmtDay).join(", ") });
+
+  // A blocked save: name every day without a choice, mark those days, scroll to the first and move focus into it.
+  function flagMissingDays(missing) {
+    avail.flagged = true;
+    syncForm();
+    showFieldError("slots-error", missingDaysMessage(missing));
+    const card = $("day-" + missing[0]);
+    if (card) {
+      const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      card.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      const first = card.querySelector("input:not(:disabled), button");
+      if (first) first.focus({ preventScroll: true });
+    }
+  }
+
   async function saveAvailability(e) {
     e.preventDefault();
     if (avail.busy) return;
     showFieldError("slots-error", ""); showFieldError("text-error", ""); avail.notice = "";
+    const missing = AM.missingDays(avail.sel, avail.off, avail.data.week.days);
+    if (missing.length) { flagMissingDays(missing); return; }      // every day needs an explicit choice (the server checks it too)
     const probs = AM.problems(avail.sel, avail.text);
     if (probs.includes("no_slots")) { showFieldError("slots-error", T.availability.needOne); return; }
     avail.busy = true; syncForm();
     try {
-      const data = await api("/api/availability", { method: "PUT", body: JSON.stringify({ week_start: avail.data.week.start, slots: AM.toSlots(avail.sel), free_text: avail.text.trim() ? avail.text : null }) });
-      avail.data = data; avail.lost = false;
-      avail.saved = { sel: AM.fromSlots(data.submission.slots), text: data.submission.free_text || "" };
+      const data = await api("/api/availability", { method: "PUT", body: JSON.stringify({ week_start: avail.data.week.start, slots: AM.toSlots(avail.sel), unavailable_days: AM.unavailableList(avail.off, avail.data.week.days), free_text: avail.text.trim() ? avail.text : null }) });
+      avail.data = data; avail.lost = false; avail.flagged = false;
+      avail.saved = { sel: AM.fromSlots(data.submission.slots), text: data.submission.free_text || "", off: AM.offFromDays(data.submission.unavailable_days) };
       avail.sel = AM.fromSlots(data.submission.slots); avail.text = avail.saved.text;
-      avail.off = AM.offFromSlots(data.submission.slots, data.week.days, true);
+      avail.off = AM.offFromDays(data.submission.unavailable_days);
       avail.notice = fmt(T.availability.saved, { when: fmtWhen(data.cycle.closes_at) });
       avail.busy = false;
       drawAvailability(); announce(avail.notice);
     } catch (err) {
       avail.busy = false;
       const fields = (err.errors || []);
-      const slotMsg = fields.find((f) => f.field === "slots"), textMsg = fields.find((f) => f.field === "free_text");
+      const slotMsg = fields.find((f) => f.field === "slots" || f.field === "days"), textMsg = fields.find((f) => f.field === "free_text");
       if (slotMsg || textMsg) { syncForm(); showFieldError("slots-error", slotMsg ? slotMsg.message : ""); showFieldError("text-error", textMsg ? textMsg.message : ""); }
       else if (err.status === 409) { await loadAvailability(false); avail.notice = ""; const b = $("avail-body"); if (b) b.prepend(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: err.message }))); }
       else { avail.notice = ""; syncForm(); showFieldError("slots-error", err.message); }
@@ -476,14 +507,16 @@
     const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-name", text: e.name, dir: "auto" }), badges, el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
     const detail = el("div", { class: "emp-detail" });
     detail.append(el("h3", { text: S.shiftsTitle }));
-    if (e.days.length) {
+    if (e.days.length || (e.unavailable_days || []).length) {
       // all seven days, each with its submitted shifts beside it (a dash for a day with none)
       const byDay = {}; e.days.forEach((d) => { byDay[d.date] = d.shifts; });
+      const offDays = new Set(e.unavailable_days || []);
       detail.append(el("ul", { class: "emp-days" }, weekDays.map((day) => el("li", { class: "emp-day" },
         el("strong", { class: "emp-day-name", text: fmtDayShort(day) }),
         el("span", { class: "emp-shifts" }, (byDay[day] || []).length
           ? byDay[day].map((s) => el("span", { class: "emp-shift" }, el("span", { text: s.name }), " ", el("span", { class: "ltr", text: s.start_time + "–" + s.end_time })))
-          : [el("span", { class: "muted", "aria-hidden": "true", text: "—" }), el("span", { class: "sr-only", text: S.noShiftsDay })])))));
+          : offDays.has(day) ? el("span", { class: "muted", text: S.dayUnavailable })      // explicitly "לא זמין/ה"
+            : [el("span", { class: "muted", "aria-hidden": "true", text: "—" }), el("span", { class: "sr-only", text: S.noShiftsDay })])))));
     } else {
       detail.append(el("p", { class: "muted", text: e.status === "exempt" ? S.noShiftsExempt : S.noShifts }));
     }

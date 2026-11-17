@@ -52,6 +52,7 @@ def build_report(db: Session, now: datetime) -> dict:
             "id": u.id, "name": u.name, "status": status,
             "updated_at": _iso_utc(sub.updated_at) if sub is not None else None,
             "leave_dates": [d.isoformat() for d in leave_days], "full_week_leave": full_week,
+            "unavailable_days": sorted(u.day.isoformat() for u in sub.unavailable_days) if sub is not None else [],   # explicit "לא זמין/ה"; a day with neither shifts nor this was never chosen (older submissions)
             "days": [{"date": d.isoformat(), "shifts": [{k: v for k, v in sh.items() if k != "_order"} for sh in sorted(v, key=lambda x: x["_order"])]}
                      for d, v in sorted(by_day.items())],
             "free_text": sub.free_text if sub is not None else None,

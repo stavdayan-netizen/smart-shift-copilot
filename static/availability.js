@@ -59,17 +59,24 @@
     return n === 0 ? "none" : n === shifts.length ? "all" : "some";
   }
 
-  /* "Unavailable" days. `off` is a plain object {day: true}. Choosing "לא זמין/ה" clears the day's shifts and marks the day
-     (its checkboxes are then disabled); choosing it again only unmarks it, and "כל המשמרות" unmarks it and selects every
-     shift. The marker is display state: the server stores slots only, so on load a day with no slots of an existing
-     submission is shown as unavailable (the employee chose it), and before the first submission no day is. */
-  function offFromSlots(slots, days, submitted) {
+  /* Every day has one of three states: untouched (no shift, not unavailable), has shifts, or explicitly "לא זמין/ה". `off` is a
+     plain object {day: true} of the explicit "לא זמין/ה" days; it is saved with the submission (unavailable_days). Choosing
+     "לא זמין/ה" clears the day's shifts and marks the day (its checkboxes are then disabled); choosing it again only unmarks it
+     (back to untouched), and "כל המשמרות" unmarks it and selects every shift. A day left empty is NEVER treated as unavailable. */
+  function offFromDays(days) {
     var off = {};
-    if (!submitted) return off;
-    var withSlots = {};
-    (slots || []).forEach(function (s) { withSlots[s.day] = true; });
-    (days || []).forEach(function (d) { if (!withSlots[d]) off[d] = true; });
+    (days || []).forEach(function (d) { off[d] = true; });
     return off;
+  }
+
+  /* The days of the week that still need a choice, in week order. */
+  function missingDays(sel, off, days) {
+    return (days || []).filter(function (d) { return countDay(sel, d) === 0 && !off[d]; });
+  }
+
+  /* The explicit "לא זמין/ה" days to send, in week order (days outside the week are never sent). */
+  function unavailableList(off, days) {
+    return (days || []).filter(function (d) { return !!off[d]; });
   }
 
   function isOff(off, day) { return !!off[day]; }
@@ -104,8 +111,8 @@
     return out;
   }
 
-  function isDirty(sel, text, saved) {
-    return !equal(sel, saved.sel) || String(text || "").trim() !== String(saved.text || "").trim();
+  function isDirty(sel, text, saved, off) {
+    return !equal(sel, saved.sel) || String(text || "").trim() !== String(saved.text || "").trim() || !equal(off || {}, saved.off || {});
   }
 
   /* The manager's status filters of the submissions page. "total" shows everyone; "leave" shows only employees whose status is
@@ -138,7 +145,7 @@
   }
 
   var api = { TEXT_MAX: TEXT_MAX, key: key, fromSlots: fromSlots, toSlots: toSlots, has: has, toggle: toggle, selectAll: selectAll,
-              clearDay: clearDay, offFromSlots: offFromSlots, isOff: isOff, toggleOff: toggleOff, selectAllDay: selectAllDay, countDay: countDay, count: count, dayState: dayState, equal: equal, textLength: textLength,
+              clearDay: clearDay, offFromDays: offFromDays, missingDays: missingDays, unavailableList: unavailableList, isOff: isOff, toggleOff: toggleOff, selectAllDay: selectAllDay, countDay: countDay, count: count, dayState: dayState, equal: equal, textLength: textLength,
               problems: problems, isDirty: isDirty, groupDates: groupDates, filterEmployees: filterEmployees, FILTER_STATUS: FILTER_STATUS, splitDuration: splitDuration };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AvailabilityModel = api;

@@ -8,9 +8,12 @@
   the window is open (409 Hebrew), the hourly save limit (429), the content (422 Hebrew, per field).
   Saved atomically with its audit row (counts only: no slots and no free text in the audit record or the logs).
 
-Content rules: at least one slot (an employee who cannot work at all does not submit; there is no zero-shift
-submission), each slot on a day of the week and an existing shift, no duplicates, free text optional and at most
-1,000 characters after cleaning. There are no numeric shift-count preferences (removed 2026-11-12).
+Content rules: every one of the seven days needs an explicit choice, either at least one shift or "לא זמין/ה" (listed in
+`unavailable_days`), never both for the same day; a day with neither is incomplete and the 422 names every such day. At least one
+shift overall (an employee who cannot work at all does not submit; there is no zero-shift submission). Each slot is on a day of the
+week and an existing shift, no duplicates, free text optional and at most 1,000 characters after cleaning. Submissions saved before
+the explicit choice existed keep their slots; their empty days are neither assumed available nor unavailable until the employee
+edits and chooses (the next save needs all seven days). There are no numeric shift-count preferences (removed 2026-11-12).
 """
 from __future__ import annotations
 
@@ -24,7 +27,8 @@ from sqlalchemy.orm import Session
 
 from . import auth, clock, cycle_service, limits
 from .audit import audited, record
-from .db import AvailabilitySlot, AvailabilitySubmission, Shift, User, get_db, utcnow
+from .cycle import weekday_he
+from .db import AvailabilitySlot, AvailabilitySubmission, AvailabilityUnavailableDay, Shift, User, get_db, utcnow
 from .logging_setup import log_event
 
 FREE_TEXT_MAX = 1000
@@ -36,7 +40,18 @@ MESSAGES = {
     "duplicate": "אחת המשמרות נבחרה יותר מפעם אחת.",
     "text_too_long": f"הבקשות ארוכות מדי. אפשר עד {FREE_TEXT_MAX:,} תווים.",
     "no_shifts": "עדיין לא הוגדרו משמרות. יש לפנות למנהל/ת.",
+    "duplicate_day": "אחד הימים סומן כלא זמין/ה יותר מפעם אחת.",
 }
+
+
+def missing_days_message(days: list[date]) -> str:
+    """\"יש לבחור זמינות ביום חמישי\" for one day, \"יש לבחור זמינות בימים: יום ראשון, יום חמישי\" for several."""
+    names = [weekday_he(d) for d in days]
+    return f"יש לבחור זמינות ב{names[0]}" if len(names) == 1 else "יש לבחור זמינות בימים: " + ", ".join(names)
+
+
+def conflict_message(d: date) -> str:
+    return f"{weekday_he(d)} סומן גם כלא זמין/ה וגם עם משמרות. יש לבחור אחד מהם."
 
 
 class FieldErrors(Exception):
@@ -57,6 +72,7 @@ class AvailabilityIn(BaseModel):
     model_config = ConfigDict(extra="forbid")  # a forged user id or any other extra field is rejected
     week_start: date
     slots: list[SlotIn] = Field(default_factory=list, max_length=200)
+    unavailable_days: list[date] = Field(default_factory=list, max_length=14)     # the days the employee marked "לא זמין/ה"
     free_text: str | None = Field(default=None, max_length=5000)  # loose cap; the real one is applied after cleaning
 
 
@@ -72,13 +88,12 @@ def clean_free_text(raw: str | None) -> str | None:
     return text or None
 
 
-def validate(payload: AvailabilityIn, shifts: dict[int, Shift]) -> tuple[list[tuple[date, int]], str | None]:
+def validate(payload: AvailabilityIn, shifts: dict[int, Shift]) -> tuple[list[tuple[date, int]], list[date], str | None]:
     errors: list[dict] = []
-    week_days = {payload.week_start + timedelta(days=i) for i in range(7)}
+    ordered_days = [payload.week_start + timedelta(days=i) for i in range(7)]
+    week_days = set(ordered_days)
     if not shifts:
         errors.append({"field": "slots", "message": MESSAGES["no_shifts"]})
-    elif not payload.slots:
-        errors.append({"field": "slots", "message": MESSAGES["no_slots"]})
     pairs: list[tuple[date, int]] = []
     seen: set[tuple[date, int]] = set()
     for slot in payload.slots:
@@ -92,13 +107,31 @@ def validate(payload: AvailabilityIn, shifts: dict[int, Shift]) -> tuple[list[tu
         else:
             seen.add(key)
             pairs.append(key)
+    off: set[date] = set()
+    for d in payload.unavailable_days:
+        if d not in week_days:
+            errors.append({"field": "days", "message": MESSAGES["bad_day"]})
+        elif d in off:
+            errors.append({"field": "days", "message": MESSAGES["duplicate_day"]})
+        else:
+            off.add(d)
+    with_shifts = {d for d, _ in pairs}
+    for d in ordered_days:
+        if d in off and d in with_shifts:
+            errors.append({"field": "days", "message": conflict_message(d)})
     text = clean_free_text(payload.free_text)
     if text is not None and len(text) > FREE_TEXT_MAX:
         errors.append({"field": "free_text", "message": MESSAGES["text_too_long"]})
+    if not errors and shifts:
+        incomplete = [d for d in ordered_days if d not in with_shifts and d not in off]
+        if incomplete:                                           # every day needs an explicit choice; name all the missing ones
+            errors.append({"field": "days", "message": missing_days_message(incomplete)})
+        elif not pairs:                                          # all seven days explicitly unavailable: no zero-shift submission
+            errors.append({"field": "slots", "message": MESSAGES["no_slots"]})
     if errors:
         unique = list({(e["field"], e["message"]): e for e in errors}.values())
         raise FieldErrors(unique)
-    return sorted(pairs), text
+    return sorted(pairs), sorted(off), text
 
 
 def _iso_utc(dt: datetime) -> str:
@@ -111,6 +144,7 @@ def _serialize(sub: AvailabilitySubmission | None) -> dict | None:
     return {
         "week_start": sub.week_start.isoformat(),
         "slots": sorted(({"day": s.day.isoformat(), "shift_id": s.shift_id} for s in sub.slots), key=lambda s: (s["day"], s["shift_id"])),
+        "unavailable_days": sorted(u.day.isoformat() for u in sub.unavailable_days),     # explicit "לא זמין/ה" days (empty for submissions saved before this existed)
         "free_text": sub.free_text,
         "submitted_at": _iso_utc(sub.submitted_at),
         "updated_at": _iso_utc(sub.updated_at),
@@ -156,7 +190,7 @@ def put_availability(payload: AvailabilityIn, user: User = Depends(auth.require_
     cycle_service.enforce_window(db, payload.week_start)          # 400 / 409
     limits.check_availability_save_limit(db, user.id)             # 429
     shifts = {s.id: s for s in db.scalars(select(Shift)).all()}
-    pairs, text = validate(payload, shifts)                        # 422
+    pairs, off_days, text = validate(payload, shifts)              # 422
     created = False
     for attempt in (1, 2):
         try:
@@ -170,12 +204,15 @@ def put_availability(payload: AvailabilityIn, user: User = Depends(auth.require_
                     db.flush()
                 else:
                     sub.slots.clear()
-                    db.flush()                                   # delete the old slots before inserting the new ones
+                    sub.unavailable_days.clear()
+                    db.flush()                                   # delete the old rows before inserting the new ones
                 sub.free_text = text
                 sub.updated_at = now
                 sub.slots = [AvailabilitySlot(day=d, shift_id=s) for d, s in pairs]
+                sub.unavailable_days = [AvailabilityUnavailableDay(day=d) for d in off_days]
                 record(db, actor_id=user.id, action="availability.submitted", entity="availability_submission",
                        entity_id=sub.id, after={"week_start": payload.week_start.isoformat(), "slots": len(pairs),
+                                                "unavailable_days": len(off_days),
                                                 "has_free_text": text is not None, "created": created})
             break
         except IntegrityError:                                   # two first saves at once: the second becomes an update
@@ -183,7 +220,7 @@ def put_availability(payload: AvailabilityIn, user: User = Depends(auth.require_
             if attempt == 2:
                 raise
     log_event("availability_submitted", user_id=user.id, week_start=payload.week_start.isoformat(), slots=len(pairs),
-              has_free_text=text is not None, free_text_len=len(text or ""), created=created)
+              unavailable_days=len(off_days), has_free_text=text is not None, free_text_len=len(text or ""), created=created)
     body = build_payload(db, user, clock.now())
     body["saved"] = True
     return body
