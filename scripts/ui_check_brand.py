@@ -4,7 +4,7 @@
         --employee-name "דנה" --employee-code XXXXX-XXXXX --out docs/ui-checks/branding
 
 Per viewport (360, 390, 768, 1280) and colour scheme: the full approved logo (with its tagline) loads at its native 1872x538
-on the login screen and fits without overflow; there is no plate behind it; in dark mode the browser chooses the derived light-wordmark file (wordmark pixels bright, star still white), in light mode the approved file as delivered; after login the header shows the approved
+on the login screen and fits without overflow; there is no plate behind it; in dark mode the browser chooses the derived light-wordmark file (wordmark pixels bright, the star a transparent cut-out as in the approved logo), in light mode the approved file as delivered; after login the header shows the approved
 icon (loaded, 32 px) and the name "Shiftimizer" for the manager and the employee; the browser title is "Shiftimizer"; every icon
 and manifest URL declared in the page answers 200; the old product name appears nowhere in the visible text; no console errors.
 Reuses the driver of scripts/ui_check.py. Use only against a local or test instance with fictional data.
@@ -109,7 +109,7 @@ def main() -> int:
                 check(p["plateBg"] == "rgba(0, 0, 0, 0)", f"{tag}: the logo must sit directly on the card (no plate), background is {p['plateBg']}")
                 if scheme == "dark":
                     check(p["src"].endswith("/static/brand/full_transparent_dark.png") and p["wordmarkBrightness"] > 200, f"{tag}: dark mode must use the light-wordmark file: {p['src']} brightness {p['wordmarkBrightness']}")
-                    check(p["starAlpha"] == 255 and min(p["starRgb"]) > 240, f"{tag}: the star must stay white on the dark card: {p['starAlpha']} {p['starRgb']}")
+                    check(p["starAlpha"] == 0, f"{tag}: the star must stay a transparent cut-out (alpha {p['starAlpha']})")
                 else:
                     check(p["src"].endswith("/static/brand/full_transparent.png") and p["wordmarkBrightness"] < 60, f"{tag}: light mode must use the approved file: {p['src']} brightness {p['wordmarkBrightness']}")
                 check("Smart Shift" not in p["text"], f"{tag}: the old name is still visible on the login screen")

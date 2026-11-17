@@ -5,11 +5,11 @@
 and the kit contains no reversed version. It is shown only in dark mode (`<picture>` with `prefers-color-scheme: dark`); light mode uses
 the approved file as delivered.
 
-Nothing is redrawn: the glyph shapes, spacing and anti-aliasing are the approved pixels.
-- Icon tiles: copied pixel for pixel.
-- Star: the approved icon's star is a transparent cut-out that shows white on the approved white-background logo; its pixels are composited
-  over white (what the white-background version shows), so it stays white on the dark card.
-- Wordmark: dark navy pixels become a near-white (`#F4F9FA`), alpha unchanged; the three orange dots are copied untouched.
-- Tagline: slate pixels become a light slate (`#B9CDD4`), alpha unchanged; the turquoise divider is copied untouched.
+Nothing is redrawn: the glyph shapes, spacing, anti-aliasing and every pixel's alpha are the approved ones.
+- Icon (all four tiles and the star): copied pixel for pixel. The star remains the transparent cut-out of the approved logo, so the card
+  behind the logo shows through it.
+- Wordmark: dark navy pixels become a near-white (`#F4F9FA`); the three orange dots are copied untouched.
+- Tagline: slate pixels become a light slate (`#B9CDD4`); the turquoise divider is copied untouched.
 
-`tests/test_branding.py` re-checks these guarantees on the committed files. The approved originals and `SHA256SUMS` are unchanged.
+`tests/test_branding.py` re-checks these guarantees on the committed files (the whole icon identical, alpha identical everywhere, only
+text pixels recoloured). The approved originals and `SHA256SUMS` are unchanged.

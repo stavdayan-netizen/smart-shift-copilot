@@ -146,25 +146,20 @@ def test_the_dark_logo_is_the_approved_logo_with_only_the_dark_text_recoloured()
     assert (w, h) == (w2, h2) == (1872, 538)
     px = lambda rows, x, y: tuple(rows[y][x * 4:x * 4 + 4])
     wordmark, tagline = (244, 249, 250), (185, 205, 212)
-    star = recoloured = 0
+    recoloured = 0
     for y in range(h):
         for x in range(w):
             o, d = px(orig, x, y), px(dark, x, y)
             if o == d:
                 continue
-            if x < 560:
-                # icon: only the star changes, and only by becoming opaque (the approved white-background look)
-                assert 290 <= x <= 525 and 40 <= y <= 262, f"icon pixel changed outside the star tile at {(x, y)}"
-                assert d[3] == 255 and o[3] < 255
-                k = o[3] / 255
-                assert all(abs(d[i] - (o[i] * k + 255 * (1 - k))) <= 1 for i in range(3)), "star pixel is not the approved composite over white"
-                star += 1
-            else:
-                assert d[3] == o[3], f"text pixel alpha changed at {(x, y)}"
-                assert d[:3] in (wordmark, tagline), f"text pixel recoloured to an unexpected colour at {(x, y)}"
-                assert (d[:3] == wordmark) == (100 <= y < 330)
-                recoloured += 1
-    assert 500 < star < 20000 and recoloured > 50000
+            # the whole icon, the star's transparent cut-out included, is identical to the approved file
+            assert x >= 560, f"icon pixel changed at {(x, y)}: {o} -> {d}"
+            assert d[3] == o[3], f"text pixel alpha changed at {(x, y)}"
+            assert d[:3] in (wordmark, tagline), f"text pixel recoloured to an unexpected colour at {(x, y)}"
+            assert (d[:3] == wordmark) == (100 <= y < 330)
+            recoloured += 1
+    assert px(dark, 405, 150)[3] == 0 and px(orig, 405, 150)[3] == 0, "the star must stay a transparent cut-out"
+    assert recoloured > 50000
     # the saturated pixels of the text area (orange dots, turquoise divider) are untouched
     kept = 0
     for y in range(100, 470):
