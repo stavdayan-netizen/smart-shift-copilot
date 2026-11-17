@@ -311,7 +311,7 @@ main:focus { outline: none; }
 .emp-summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* a consistent name column, then the status badge and the last update right after it: every badge starts at the same position whatever the name length;
    on a narrow card the timestamp wraps under the badge (same start edge) */
-.emp-main { flex: 1 1 auto; min-inline-size: 0; display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); align-items: start; column-gap: 8px; }
+.emp-main { flex: 1 1 auto; min-inline-size: 0; display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: start; column-gap: 8px; }
 .emp-name { font-weight: 700; font-size: 1.0625rem; overflow-wrap: anywhere; min-inline-size: 0; text-align: start; }
 .badges { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-inline-size: 0; }
 /* the chevron sits in the card's far corner without taking width from the group, so the badge and the last update keep one compact block */
@@ -327,9 +327,9 @@ main:focus { outline: none; }
 .emp-days { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 /* one row per day, three aligned columns with small balanced gaps: the weekday (fixed width), its date (fixed width, so the dates line up whatever the weekday),
    then the shifts (flexible, wrapping on narrow screens) */
-.emp-day { display: grid; grid-template-columns: 7.4rem minmax(0, 1fr); align-items: start; gap: 4px 8px; padding-block: 4px; border-block-end: 1px solid var(--line); }
+.emp-day { display: grid; grid-template-columns: 7.7rem minmax(0, 1fr); align-items: start; gap: 4px 12px; padding-block: 4px; border-block-end: 1px solid var(--line); }
 .emp-day:last-child { border-block-end: 0; }
-.emp-day-name { display: grid; grid-template-columns: 4.4rem 2.6rem; column-gap: 6px; font-size: .9375rem; white-space: nowrap; }
+.emp-day-name { display: grid; grid-template-columns: 4.4rem 2.6rem; column-gap: 10px; font-size: .9375rem; white-space: nowrap; }
 .emp-day-w { text-align: start; }
 .emp-day-d { direction: ltr; unicode-bidi: isolate; justify-self: start; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
 .emp-shifts { display: flex; flex-wrap: wrap; gap: 4px 6px; min-inline-size: 0; }
@@ -369,7 +369,7 @@ dialog .dialog-actions { display: flex; justify-content: flex-end; padding: 0 20
 /* ---------- wider screens ---------- */
 @media (min-width: 768px) {
   .brand { gap: 6px; }
-  .emp-main { grid-template-columns: 8.5rem minmax(0, 1fr); padding-inline-end: 32px; }
+  .emp-main { grid-template-columns: 13rem minmax(0, 1fr); padding-inline-end: 32px; }
   .emp-updated { font-size: .875rem; }
   .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

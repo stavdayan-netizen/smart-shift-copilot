@@ -48,7 +48,7 @@ PROBE = r"""
     brandGap: (() => { const i = document.querySelector('.appbar .brand-icon'), t = document.querySelector('.appbar .brand span'); if (!i || !t) return null; return Math.round(t.getBoundingClientRect().left - i.getBoundingClientRect().right); })(),
     brandIcon: (() => { const i = document.querySelector('.appbar .brand-icon'); return i ? Math.round(i.getBoundingClientRect().width) : null; })(),
     cardsAlign: q('.emp-card').map((c) => { const r = (e) => e.getBoundingClientRect(), nm = r(c.querySelector('.emp-name')), bd = r(c.querySelector('.badge')), up = c.querySelector('.emp-updated');
-      const u = up ? r(up) : null; const all = c.querySelectorAll('.badge'), last = r(all[all.length - 1]); return { lastBadgeLeft: Math.round(last.left), lastBadgeRight: Math.round(last.right), badgeRight: Math.round(bd.right), nameRight: Math.round(nm.right), nameToBadge: Math.round(nm.left - bd.right), nameWidth: Math.round(nm.width),
+      const u = up ? r(up) : null; const all = c.querySelectorAll('.badge'), last = r(all[all.length - 1]); return { lastBadgeLeft: Math.round(last.left), lastBadgeRight: Math.round(last.right), badgeRight: Math.round(bd.right), nameRight: Math.round(nm.right), nameToBadge: Math.round(nm.left - bd.right), nameWidth: Math.round(nm.width), nameHeight: Math.round(nm.height),
         updRight: u ? Math.round(u.right) : null, updLeft: u ? Math.round(u.left) : null, badgeLeft: Math.round(bd.left), updUnder: u ? (u.top - bd.bottom) > -4 && Math.abs((u.top + u.bottom) / 2 - (bd.top + bd.bottom) / 2) > 8 : null }; }),
     group: (() => { const c = document.querySelector('.emp-card[data-status=submitted]'); if (!c) return null;
       const r = (el) => el.getBoundingClientRect(), n = r(c.querySelector('.emp-name')), bd = r(c.querySelector('.badge')), up = r(c.querySelector('.emp-updated')), m = r(c.querySelector('.emp-main'));
@@ -189,6 +189,8 @@ def main() -> int:
                 check(len(ca) >= 6 and len({c["badgeRight"] for c in ca}) == 1 and len({c["nameRight"] for c in ca}) == 1 and len({c["nameWidth"] for c in ca}) == 1,
                       f"{tag}: every status badge and name column must start at the same position whatever the name length: badges {sorted({c['badgeRight'] for c in ca})}, names {sorted({c['nameRight'] for c in ca})}")
                 check(all(c["nameToBadge"] == 8 for c in ca), f"{tag}: the badge must follow the name column closely: {sorted({c['nameToBadge'] for c in ca})}")
+                check(ca[0]["nameWidth"] == (208 if w >= 768 else 96), f"{tag}: the fixed name column is {ca[0]['nameWidth']} px (208 on desktop, 96 on mobile)")
+                check(all(c["nameHeight"] <= (60 if w >= 768 else 112) for c in ca), f"{tag}: even the long full names must stay within two lines on desktop and four on mobile: {sorted({c['nameHeight'] for c in ca})}")
                 for c in ca:
                     if c["updRight"] is None:
                         continue
@@ -217,7 +219,7 @@ def main() -> int:
                 check(len(gm) == 7 and len({r["nameLeft"] for r in gm}) == 1 and len({r["nameWidth"] for r in gm}) == 1, f"{tag}: the day/date labels must share one fixed-width column: {[(r['nameLeft'], r['nameWidth']) for r in gm]}")
                 check(all(gm[i]["top"] < gm[i + 1]["top"] for i in range(6)), f"{tag}: every day must be on its own row")
                 check(len({r["weekdayRight"] for r in gm}) == 1 and len({r["dateRight"] for r in gm}) == 1 and len({r["dateLeft"] for r in gm}) == 1, f"{tag}: weekdays and dates must each line up in their own column: {[(r['weekdayRight'], r['dateRight']) for r in gm]}")
-                check(all(r["weekdayToDate"] == 6 and r["nameToShifts"] == 8 for r in gm) and len({r["shiftsRight"] for r in gm}) == 1, f"{tag}: small balanced gaps (6 px weekday-date, 8 px to the shifts): {[(r['weekdayToDate'], r['nameToShifts']) for r in gm]}")
+                check(all(r["weekdayToDate"] == 10 and r["nameToShifts"] == 12 for r in gm) and len({r["shiftsRight"] for r in gm}) == 1, f"{tag}: balanced gaps (10 px weekday-date, 12 px to the shifts): {[(r['weekdayToDate'], r['nameToShifts']) for r in gm]}")
                 check(all(len(set(r["chipTops"])) <= 2 for r in gm) and all(r["height"] <= (60 if w >= 768 else 76) for r in gm), f"{tag}: day rows must stay compact: {[r['height'] for r in gm]}")
                 if w >= 390:
                     check(all(len(set(r["chipTops"])) <= 1 for r in gm), f"{tag}: multiple shifts of a day should sit together on one line: {[r['chipTops'] for r in gm]}")
