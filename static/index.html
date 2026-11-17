@@ -6,8 +6,13 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#F6F3EE" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#111618" media="(prefers-color-scheme: dark)">
-  <title>Smart Shift Copilot</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <title>Shiftimizer</title>
+  <link rel="icon" href="/static/brand/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/brand/icon_32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/brand/icon_16.png">
+  <link rel="apple-touch-icon" href="/static/brand/icon_180_white.png">
+  <link rel="manifest" href="/static/brand/manifest.json">
+  <meta name="apple-mobile-web-app-title" content="Shiftimizer">
   <link rel="preload" href="/static/fonts/heebo-hebrew-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/styles.css">
   <script src="/static/strings.js" defer></script>
@@ -42,7 +47,10 @@
   <section id="view-login" class="login" hidden aria-labelledby="login-title">
     <div class="card login-card">
       <header>
-        <span class="brand"><span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-sparkle"/></svg></span><span data-t="app.name"></span></span>
+        <div class="login-logo"><picture>
+          <source srcset="/static/brand/full_transparent_dark.png" media="(prefers-color-scheme: dark)">
+          <img src="/static/brand/full_transparent.png" width="1872" height="538" alt="Shiftimizer, סידור עבודה חכם">
+        </picture></div>
         <div>
           <h1 id="login-title" data-t="login.title"></h1>
           <p class="muted" data-t="login.intro"></p>
@@ -70,7 +78,7 @@
   <!-- Application shell (manager and employee; the role decides what main shows) -->
   <div id="view-app" class="shell" hidden>
     <header class="appbar">
-      <span class="brand"><span class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-sparkle"/></svg></span><span data-t="app.name"></span></span>
+      <span class="brand"><img class="brand-icon" src="/static/brand/icon_64.png" width="32" height="32" alt=""><span data-t="app.name"></span></span>
       <div class="appbar-user" id="appbar-user">
         <button type="button" id="user-btn" class="user-btn" data-t-aria-label="account.menuLabel"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg><span id="appbar-name"></span><svg class="icon chevron" aria-hidden="true"><use href="#i-chevron"/></svg></button>
         <div id="user-menu" class="user-menu" role="menu" hidden></div>

@@ -1,4 +1,4 @@
-/* Smart Shift Copilot: the UI shell. It displays what the backend allows; authority stays on the server.
+/* Shiftimizer: the UI shell. It displays what the backend allows; authority stays on the server.
    Vanilla JS, no build step. Rules (checked by tests/test_ui_shell.py):
    - all copy comes from strings.js (window.T);
    - DOM is built with createElement/textContent; HTML strings are never assembled from data;
