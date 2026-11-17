@@ -438,3 +438,7 @@ def test_filter_cards_are_four_in_a_row_on_desktop_and_two_by_two_on_mobile_with
     assert ".stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));" in mobile
     assert "repeat(4, minmax(0, 1fr))" in CSS.split("@media (min-width: 768px)")[1].split(".emp-summary")[1].split("}")[0] or ".stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in CSS
     assert '.stat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft)' in CSS
+
+
+def test_collapsed_card_timestamp_label_is_last_update():
+    assert _strings()["submissions"]["updated"] == "עדכון אחרון: {when}"

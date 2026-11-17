@@ -129,7 +129,7 @@ def main() -> int:
                 check(len(tops) == (1 if w >= 768 else 2), f"{tag}: the four cards must be one row on desktop and a 2x2 grid on mobile (rows at {tops})")
                 rank = {"submitted": 0, "missing": 1, "exempt": 2}
                 check([rank[x] for x in p["statuses"]] == sorted(rank[x] for x in p["statuses"]), f"{tag}: order must be submitted, missing, exempt: {p['statuses']}")
-                check(all(bool(t) == (st == "submitted") for t, st in zip(p["updatedTexts"], p["statuses"])) and all(t.startswith("עודכנה ") for t in p["updatedTexts"] if t), f"{tag}: the last update belongs in every submitted card and only there: {p['updatedTexts']}")
+                check(all(bool(t) == (st == "submitted") for t, st in zip(p["updatedTexts"], p["statuses"])) and all(t.startswith("עדכון אחרון: ") for t in p["updatedTexts"] if t), f"{tag}: the last update belongs in every submitted card and only there: {p['updatedTexts']}")
                 api_order = b.js("fetch('/api/submissions', {headers: {'X-Requested-With': 'shift-copilot'}}).then((r) => r.json()).then((d) => ({ids: d.employees.map((e) => String(e.id)), upd: d.employees.filter((e) => e.status === 'submitted').map((e) => e.updated_at)}))")
                 check(api_order["ids"] == p["cardIds"], f"{tag}: the cards do not follow the server order")
                 check(api_order["upd"] == sorted(api_order["upd"], reverse=True), f"{tag}: submitted employees must be newest first: {api_order['upd']}")

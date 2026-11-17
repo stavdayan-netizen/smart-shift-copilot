@@ -85,7 +85,7 @@ window.T = {
     "statusExempt": "פטור/ה מהגשה",
     "leavePartial": "חופשה מאושרת: {dates}",
     "leaveFull": "חופשה מאושרת לכל השבוע",
-    "updated": "עודכנה {when}",
+    "updated": "עדכון אחרון: {when}",
     "shiftsTitle": "משמרות שהוגשו",
     "noShifts": "לא הוגשו משמרות.",
     "noShiftsExempt": "לא הוגשו משמרות: העובד/ת בחופשה מאושרת לכל השבוע.",
