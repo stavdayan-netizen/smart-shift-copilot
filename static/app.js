@@ -222,6 +222,7 @@
   const weekRange = (start, end) => fmt(T.availability.week, { start: fmtDate(start), end: fmtDate(end, true) });
 
   function stopAvailabilityTimer() {
+    if (subs.timer) { clearInterval(subs.timer); subs.timer = null; }
     if (avail.timer) { clearInterval(avail.timer); avail.timer = null; }
     window.onbeforeunload = null;
   }
@@ -425,6 +426,8 @@
   };
   const leaveText = (dates) => AM.groupDates(dates).map(dateRange).join(", ");
 
+  const subs = { filter: "total", data: null, timer: null };      // the selected status card survives refreshes and visits
+
   function renderSubmissions(main) {
     const S = T.submissions;
     const body = el("div", { class: "stack", id: "subs-body" }, el("p", { class: "muted", text: T.status.loading }));
@@ -432,19 +435,21 @@
     refresh.addEventListener("click", () => loadSubmissions(true));
     main.append(el("div", { class: "screen" }, el("div", { class: "screen-head" }, el("h1", { text: S.title }), refresh), body));
     loadSubmissions(false);
+    // The report stays current without a click: while this page is visible it refetches every minute (read-only, no AI call).
+    subs.timer = setInterval(() => { if (document.visibilityState === "visible") loadSubmissions(false, true); }, 60000);
   }
 
-  async function loadSubmissions(manual) {
+  async function loadSubmissions(manual, silent) {
     const S = T.submissions, body = $("subs-body"), btn = $("subs-refresh");
     if (!body) return;
-    if (btn) { btn.disabled = true; btn.querySelector("span").textContent = S.refreshing; }
+    if (btn && !silent) { btn.disabled = true; btn.querySelector("span").textContent = S.refreshing; }
     try {
-      const data = await api("/api/submissions");
+      const data = await api("/api/submissions");      // a 401 (expired session) sends the manager to the login screen, also on a background refresh
       if (!$("subs-body")) return;
       drawSubmissions(data);
       if (manual) announce(S.title);
     } catch (e) {
-      if (!$("subs-body")) return;
+      if (!$("subs-body") || silent) return;      // a failed background refresh keeps the last good report on screen
       const retry = el("button", { class: "btn", type: "button", text: S.retry });
       retry.addEventListener("click", () => loadSubmissions(true));
       $("subs-body").replaceChildren(el("div", { class: "notice notice-error", role: "alert" }, icon("alert"), el("span", { text: e.message || S.loadFailed })), retry);
@@ -467,9 +472,9 @@
     badges.append(e.status === "submitted" ? badge(S.statusSubmitted, "ok") : e.status === "exempt" ? badge(S.statusExempt, "leave") : badge(S.statusMissing, "missing"));
     if (e.full_week_leave) badges.append(badge(S.leaveFull, "leave"));
     else if (e.leave_dates.length) badges.append(badge(fmt(S.leavePartial, { dates: leaveText(e.leave_dates) }), "leave"));
+    if (e.updated_at) badges.append(el("span", { class: "emp-updated", text: fmt(S.updated, { when: fmtStamp(e.updated_at) }) }));   // last submission or update
     const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-name", text: e.name, dir: "auto" }), badges, el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
     const detail = el("div", { class: "emp-detail" });
-    if (e.updated_at) detail.append(el("p", { class: "muted", text: fmt(S.updated, { when: fmtStamp(e.updated_at) }) }));
     detail.append(el("h3", { text: S.shiftsTitle }));
     if (e.days.length) {
       // all seven days, each with its submitted shifts beside it (a dash for a day with none)
@@ -485,25 +490,49 @@
     if (e.free_text) {      // the preferences section only exists when there is something to show
       detail.append(el("h3", { text: S.freeTitle }), el("p", { class: "free-text", dir: "auto", text: e.free_text }));
     }
-    return el("details", { class: "emp-card", "data-status": e.status }, summary, detail);
+    return el("details", { class: "emp-card", "data-status": e.status, "data-id": String(e.id) }, summary, detail);
   }
+
+  // The four summary cards are the filters: one is selected at a time ("total" by default).
+  const FILTER_CARDS = [["total", "total", "total"], ["submitted", "submitted", "ok"], ["missing", "missing", "missing"], ["leave", "onLeave", "leave"]];
+  const filterCount = (c, key) => ({ total: c.total, submitted: c.submitted, missing: c.missing, leave: c.exempt })[key];
 
   function drawSubmissions(d) {
     const S = T.submissions, body = $("subs-body");
     const c = d.counts, cy = d.cycle;
-    const stat = (label, n, kind) => el("div", { class: "stat stat-" + kind }, el("span", { class: "stat-n", text: String(n) }), el("span", { class: "stat-l", text: label }));
-    const tiles = el("div", { class: "stat-grid", role: "group", "aria-label": S.counts },
-      stat(S.total, c.total, "total"), stat(S.submitted, c.submitted, "ok"), stat(S.missing, c.missing, "missing"));
-    if (c.exempt > 0) tiles.append(stat(S.exempt, c.exempt, "leave"));
+    subs.data = d;
+    const openIds = new Set([...document.querySelectorAll(".emp-card[open]")].map((x) => x.dataset.id));   // keep expanded cards across refreshes
+    const tiles = el("div", { class: "stat-grid", role: "group", "aria-label": S.filterLabel, id: "subs-filters" },
+      FILTER_CARDS.map(([key, label, kind]) => {
+        const b = el("button", { class: "stat stat-" + kind, type: "button", "data-filter": key, "aria-pressed": String(subs.filter === key) },
+          el("span", { class: "stat-n", text: String(filterCount(c, key)) }), el("span", { class: "stat-l", text: S[label] }));
+        b.addEventListener("click", () => {
+          subs.filter = key;
+          tiles.querySelectorAll(".stat").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.filter === key)));
+          drawSubmissionList();
+          announce(fmt(S.showing, { label: S[label], n: filterCount(c, key) }));
+        });
+        return b;
+      }));
     // The notice uses the closing time of the SAME window the report shows (the server picks the week and its window together).
     const notice = el("div", { class: "notice notice-info", id: "subs-notice", role: "note" }, icon("info"),
       el("span", { text: fmt(cy.state === "closed" ? S.noticeClosed : S.noticeOpen, { when: fmtDeadlineComma(cy.closes_at) }) }));
     const head = el("section", { class: "card status-card" },
       el("p", { class: "week-range", text: fmt(S.week, { start: fmtDate(d.week.start), end: fmtDate(d.week.end, true) }) }));
-    const list = d.employees.length
-      ? el("section", { class: "emp-list", "aria-label": S.list }, d.employees.map((e) => employeeCard(e, d.week.days)))
-      : el("p", { class: "muted", text: S.empty });
-    body.replaceChildren(notice, head, tiles, list);
+    body.replaceChildren(notice, head, tiles, el("div", { id: "subs-list" }));
+    drawSubmissionList(openIds);
+  }
+
+  function drawSubmissionList(openIds) {
+    const S = T.submissions, d = subs.data, host = $("subs-list");
+    if (!d || !host) return;
+    const keep = openIds || new Set([...document.querySelectorAll(".emp-card[open]")].map((x) => x.dataset.id));
+    const rows = AM.filterEmployees(d.employees, subs.filter);
+    const emptyText = !d.employees.length ? S.empty : ({ submitted: S.emptySubmitted, missing: S.emptyMissing, leave: S.emptyLeave })[subs.filter] || S.empty;
+    host.replaceChildren(rows.length
+      ? el("section", { class: "emp-list", "aria-label": S.list }, rows.map((e) => employeeCard(e, d.week.days)))
+      : el("p", { class: "muted empty-state", id: "subs-empty", text: emptyText }));
+    host.querySelectorAll(".emp-card").forEach((x) => { if (keep.has(x.dataset.id)) x.open = true; });
   }
 
   // ---- account (both roles)

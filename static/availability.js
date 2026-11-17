@@ -108,6 +108,16 @@
     return !equal(sel, saved.sel) || String(text || "").trim() !== String(saved.text || "").trim();
   }
 
+  /* The manager's status filters of the submissions page. "total" shows everyone; "leave" shows only employees whose status is
+     "exempt" (approved leave for the whole week and no submission): partial-week leave never puts anyone there. The server's order
+     (submitted newest first, missing by name, exempt by name) is kept. */
+  var FILTER_STATUS = { total: null, submitted: "submitted", missing: "missing", leave: "exempt" };
+  function filterEmployees(employees, key) {
+    if (!Object.prototype.hasOwnProperty.call(FILTER_STATUS, key)) return employees.slice();
+    var status = FILTER_STATUS[key];
+    return employees.filter(function (e) { return status === null || e.status === status; });
+  }
+
   /* ["2026-12-01","2026-12-02","2026-12-04"] -> [{start:"2026-12-01",end:"2026-12-02"},{start:"2026-12-04",end:"2026-12-04"}] (input in any order, duplicates ignored). */
   function groupDates(isoDates) {
     var sorted = Array.from(new Set(isoDates || [])).sort(), out = [];
@@ -129,7 +139,7 @@
 
   var api = { TEXT_MAX: TEXT_MAX, key: key, fromSlots: fromSlots, toSlots: toSlots, has: has, toggle: toggle, selectAll: selectAll,
               clearDay: clearDay, offFromSlots: offFromSlots, isOff: isOff, toggleOff: toggleOff, selectAllDay: selectAllDay, countDay: countDay, count: count, dayState: dayState, equal: equal, textLength: textLength,
-              problems: problems, isDirty: isDirty, groupDates: groupDates, splitDuration: splitDuration };
+              problems: problems, isDirty: isDirty, groupDates: groupDates, filterEmployees: filterEmployees, FILTER_STATUS: FILTER_STATUS, splitDuration: splitDuration };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.AvailabilityModel = api;
 })(typeof window !== "undefined" ? window : globalThis);

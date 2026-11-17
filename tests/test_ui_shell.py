@@ -393,7 +393,7 @@ def test_submissions_notice_copy_and_placement():
     assert s["noticeClosed"] == "ההגשה לשבוע זה נסגרה ב{when}."
     code = _strip_js_comments(APP_JS)
     body = code.split("function drawSubmissions")[1].split("function renderAccount")[0]
-    assert "body.replaceChildren(notice, head, tiles, list)" in body                    # below the heading, above the counts
+    assert "body.replaceChildren(notice, head, tiles," in body                    # below the heading, above the counts
     assert "cy.closes_at" in body and "d.cycle" in body                                  # the deadline of the displayed report's own window
 
 
@@ -415,3 +415,26 @@ def test_copilot_examples_and_submissions_card_copy():
     body = code.split("function employeeCard")[1].split("function drawSubmissions")[0]
     assert "if (e.free_text)" in body and "S.freeTitle" in body                           # preferences only when there are some
     assert "weekDays.map" in body                                                           # all seven days, shifts beside each
+
+
+def test_summary_cards_are_the_filters_with_the_requested_labels_and_order():
+    s = _strings()["submissions"]
+    assert (s["total"], s["submitted"], s["missing"], s["onLeave"]) == ("סה״כ עובדים", "הגישו", "טרם הגישו", "בחופשה")
+    code = _strip_js_comments(APP_JS)
+    body = code.split("function drawSubmissions")[1].split("function renderAccount")[0]
+    assert 'const FILTER_CARDS = [["total", "total", "total"], ["submitted", "submitted", "ok"], ["missing", "missing", "missing"], ["leave", "onLeave", "leave"]]' in code
+    assert 'el("button", { class: "stat stat-" + kind' in body and '"aria-pressed"' in body       # the cards are real buttons with a pressed state
+    assert 'filter: "total"' in code                                                                # default: everyone
+    assert "AM.filterEmployees(d.employees, subs.filter)" in body
+    assert "emptyLeave" in body and "S.emptySubmitted" in body and "S.emptyMissing" in body       # an empty state for each filter
+    assert 'class: "emp-updated"' in code and "e.updated_at" in code                                # last submission/update in the collapsed card
+    assert "dataset.id" in body and "x.open = true" in body                                         # expanded cards survive refreshes and filter changes
+    assert "setInterval(" in code.split("function renderSubmissions")[1].split("async function loadSubmissions")[0]   # the report refreshes itself while visible
+    assert "subs.timer" in code.split("function stopAvailabilityTimer")[1].split("}")[0]            # and stops when the page is left
+
+
+def test_filter_cards_are_four_in_a_row_on_desktop_and_two_by_two_on_mobile_with_a_visible_selected_state():
+    mobile = CSS.split("@media (min-width: 768px)")[0]
+    assert ".stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));" in mobile
+    assert "repeat(4, minmax(0, 1fr))" in CSS.split("@media (min-width: 768px)")[1].split(".emp-summary")[1].split("}")[0] or ".stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in CSS
+    assert '.stat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft)' in CSS
