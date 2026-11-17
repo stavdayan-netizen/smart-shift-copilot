@@ -9,3 +9,5 @@ survives the refresh button; expandable cards, shifts beside each day, hidden em
 There is no leave data yet (Issue #28). Not covered: a real phone, screen readers.
 
 Compact-layout round (2026-11-17): the check also verifies the header brand gap (6 px on desktop, 10 px on mobile, icon still 32 px); the collapsed card's name, status badge and last update form one group (one row on desktop, name + badge then the timestamp on mobile); and expanded cards use a fixed-width day/date column and a flexible shifts column, one row per day, aligned across all seven days, multiple shifts on one line from 390 px up.
+
+Alignment round (2026-11-17): the check also verifies, across all cards including two long-named employees, that every status badge and name column starts at the same position (consistent name column, badge 8 px after it, the last update right after the badge on desktop or under it, with the same start edge, on mobile); and in expanded cards that weekdays, dates and shifts each line up in their own column across the seven rows with small balanced gaps (6 px weekday-date, 8 px to the shifts).

@@ -465,10 +465,13 @@ def test_compact_card_and_header_refinements_are_in_the_stylesheet_and_markup():
     desktop = CSS.split("@media (min-width: 768px)")[1]
     assert ".brand { gap: 6px; }" in desktop and ".brand { display: inline-flex; align-items: center; gap: 10px;" in CSS        # tighter on desktop only
     assert ".brand-icon { inline-size: 32px; block-size: 32px;" in CSS                                                      # sizes unchanged
-    # collapsed cards: name, badge and timestamp are one group (wrapping close together on a narrow card), the chevron is apart
-    assert ".emp-main { flex: 1 1 auto;" in CSS and "column-gap: 8px; row-gap: 2px;" in CSS and ".badges { display: contents; }" in CSS
+    # collapsed cards: a consistent name column, then the badge and the last update (wrapping under the badge on a narrow card); chevron apart
+    assert ".emp-main { flex: 1 1 auto; min-inline-size: 0; display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); align-items: start;" in CSS
+    assert ".emp-main { grid-template-columns: 8.5rem minmax(0, 1fr); padding-inline-end: 32px; }" in desktop
+    assert ".badges { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px;" in CSS
     code = _strip_js_comments(APP_JS)
-    assert 'el("span", { class: "emp-main" }, el("span", { class: "emp-name"' in code and 'class: "emp-updated"' in code
-    # expanded cards: one row per day, a fixed-width label column and a flexible shifts column, wider on desktop
-    assert ".emp-day { display: grid; grid-template-columns: 7rem minmax(0, 1fr);" in CSS and ".emp-day { grid-template-columns: 9.5rem minmax(0, 1fr); }" in desktop
+    assert 'el("span", { class: "emp-main" }, el("span", { class: "emp-name" }, el("bdi", { text: e.name })), badges)' in code and 'class: "emp-updated"' in code
+    # expanded cards: one row per day, three aligned columns (weekday, date, shifts) with small gaps
+    assert ".emp-day { display: grid; grid-template-columns: 7.4rem minmax(0, 1fr);" in CSS
+    assert ".emp-day-name { display: grid; grid-template-columns: 4.4rem 2.6rem; column-gap: 6px;" in CSS and ".emp-day-d { direction: ltr; unicode-bidi: isolate; justify-self: start;" in CSS
     assert 'class: "emp-day-name" }, el("span", { class: "emp-day-w"' in code and 'class: "emp-day-d"' in code and "weekDays.map" in code

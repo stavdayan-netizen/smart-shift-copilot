@@ -505,7 +505,7 @@
     else if (e.leave_dates.length) badges.append(badge(fmt(S.leavePartial, { dates: leaveText(e.leave_dates) }), "leave"));
     if (e.updated_at) badges.append(el("span", { class: "emp-updated", text: fmt(S.updated, { when: fmtStamp(e.updated_at) }) }));   // last submission or update
     // name, status badge and last update form one compact group; the chevron stays at the far end
-    const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-main" }, el("span", { class: "emp-name", text: e.name, dir: "auto" }), badges), el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
+    const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-main" }, el("span", { class: "emp-name" }, el("bdi", { text: e.name })), badges), el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
     const detail = el("div", { class: "emp-detail" });
     detail.append(el("h3", { text: S.shiftsTitle }));
     if (e.days.length || (e.unavailable_days || []).length) {
