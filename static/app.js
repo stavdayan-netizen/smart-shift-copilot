@@ -491,10 +491,10 @@
 
   function badge(text, kind) { return el("span", { class: "badge badge-" + kind, text }); }
 
-  const fmtDayShort = (iso) => {
+  const fmtDayParts = (iso) => {
     const p = {};
     new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "UTC" }).formatToParts(new Date(iso + "T00:00:00Z")).forEach((x) => { p[x.type] = x.value; });
-    return `${p.weekday} ${p.day}.${p.month}`;
+    return { weekday: p.weekday, date: `${p.day}.${p.month}` };
   };
 
   function employeeCard(e, weekDays) {
@@ -504,7 +504,8 @@
     if (e.full_week_leave) badges.append(badge(S.leaveFull, "leave"));
     else if (e.leave_dates.length) badges.append(badge(fmt(S.leavePartial, { dates: leaveText(e.leave_dates) }), "leave"));
     if (e.updated_at) badges.append(el("span", { class: "emp-updated", text: fmt(S.updated, { when: fmtStamp(e.updated_at) }) }));   // last submission or update
-    const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-name", text: e.name, dir: "auto" }), badges, el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
+    // name, status badge and last update form one compact group; the chevron stays at the far end
+    const summary = el("summary", { class: "emp-summary" }, el("span", { class: "emp-main" }, el("span", { class: "emp-name" }, el("bdi", { text: e.name })), badges), el("span", { class: "emp-chevron", "aria-hidden": "true" }, icon("chevron")));
     const detail = el("div", { class: "emp-detail" });
     detail.append(el("h3", { text: S.shiftsTitle }));
     if (e.days.length || (e.unavailable_days || []).length) {
@@ -512,7 +513,7 @@
       const byDay = {}; e.days.forEach((d) => { byDay[d.date] = d.shifts; });
       const offDays = new Set(e.unavailable_days || []);
       detail.append(el("ul", { class: "emp-days" }, weekDays.map((day) => el("li", { class: "emp-day" },
-        el("strong", { class: "emp-day-name", text: fmtDayShort(day) }),
+        el("strong", { class: "emp-day-name" }, el("span", { class: "emp-day-w", text: fmtDayParts(day).weekday }), el("span", { class: "emp-day-d", text: fmtDayParts(day).date })),
         el("span", { class: "emp-shifts" }, (byDay[day] || []).length
           ? byDay[day].map((s) => el("span", { class: "emp-shift" }, el("span", { text: s.name }), " ", el("span", { class: "ltr", text: s.start_time + "–" + s.end_time })))
           : offDays.has(day) ? el("span", { class: "muted", text: S.dayUnavailable })      // explicitly "לא זמין/ה"
