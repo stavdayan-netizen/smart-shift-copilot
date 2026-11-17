@@ -19,7 +19,7 @@ def test_the_brand_files_are_exactly_the_approved_ones_and_unmodified():
     assert set(sums) == APPROVED
     for name, digest in sums.items():
         assert hashlib.sha256((BRAND / name).read_bytes()).hexdigest() == digest, f"{name} differs from the approved asset"
-    extra = {p.name for p in BRAND.iterdir()} - APPROVED - {"SHA256SUMS", "manifest.json"}
+    extra = {p.name for p in BRAND.iterdir()} - APPROVED - {"SHA256SUMS", "manifest.json", "DERIVED.md", "full_transparent_dark.png"}
     assert extra == set(), f"unexpected files in static/brand: {extra}"
 
 
@@ -41,6 +41,8 @@ def test_the_page_uses_the_brand_for_title_favicons_home_screen_and_header():
     assert "favicon.svg" not in HTML and not (STATIC / "favicon.svg").exists()
     login = HTML.split('id="view-login"')[1].split("</section>")[0]
     assert 'src="/static/brand/full_transparent.png"' in login and "סידור עבודה חכם" in login      # the full logo, tagline included in the image
+    assert 'srcset="/static/brand/full_transparent_dark.png" media="(prefers-color-scheme: dark)"' in login   # dark mode: the derived light-wordmark file
+    assert ".login-logo { display: grid" in CSS and "background: #FFFFFF; border-radius: var(--radius-sm); padding: 10px 16px" not in CSS   # no white plate
     header = HTML.split('class="appbar"')[1].split("</header>")[0]
     assert 'src="/static/brand/icon_64.png"' in header and 'data-t="app.name"' in header
     assert "Smart Shift" not in (STATIC / "strings.js").read_text(encoding="utf-8")
@@ -91,3 +93,90 @@ def test_accent_colours_meet_wcag_contrast_in_light_and_dark():
         assert _contrast(t["accent-text"], t["bg"]) >= 4.5, f"{name}: accent text on the page"
         assert _contrast(t["accent"], t["surface"]) >= 3.0, f"{name}: accent as a UI border or control on cards"
         assert _contrast(t["ink"], t["accent-soft"]) >= 4.5, f"{name}: body text on soft accent areas"
+
+
+# ---- the derived dark-mode logo: same pixels, only the dark text colours replaced (see static/brand/DERIVED.md)
+def _png_rgba(path):
+    """Minimal decoder for 8-bit RGBA, non-interlaced PNG files (enough for the logo; no imaging library needed)."""
+    import struct
+    import zlib
+
+    data = path.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    pos, idat, ihdr = 8, b"", None
+    while pos < len(data):
+        n, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + n]
+        if kind == b"IHDR":
+            ihdr = struct.unpack(">IIBBBBB", body)
+        elif kind == b"IDAT":
+            idat += body
+        pos += 12 + n
+    w, h, depth, ctype, _, _, interlace = ihdr
+    assert (depth, ctype, interlace) == (8, 6, 0), "expected 8-bit RGBA, not interlaced"
+    raw, stride, bpp = zlib.decompress(idat), w * 4, 4
+    rows, prev = [], bytearray(stride)
+    for y in range(h):
+        f = raw[y * (stride + 1)]
+        line = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for i in range(stride):
+            a = line[i - bpp] if i >= bpp else 0
+            b = prev[i]
+            c = prev[i - bpp] if i >= bpp else 0
+            if f == 1:
+                line[i] = (line[i] + a) & 255
+            elif f == 2:
+                line[i] = (line[i] + b) & 255
+            elif f == 3:
+                line[i] = (line[i] + ((a + b) >> 1)) & 255
+            elif f == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        rows.append(line)
+        prev = line
+    return w, h, rows
+
+
+def test_the_dark_logo_is_the_approved_logo_with_only_the_dark_text_recoloured():
+    import colorsys
+
+    w, h, orig = _png_rgba(BRAND / "full_transparent.png")
+    w2, h2, dark = _png_rgba(BRAND / "full_transparent_dark.png")
+    assert (w, h) == (w2, h2) == (1872, 538)
+    px = lambda rows, x, y: tuple(rows[y][x * 4:x * 4 + 4])
+    wordmark, tagline = (244, 249, 250), (185, 205, 212)
+    star = recoloured = 0
+    for y in range(h):
+        for x in range(w):
+            o, d = px(orig, x, y), px(dark, x, y)
+            if o == d:
+                continue
+            if x < 560:
+                # icon: only the star changes, and only by becoming opaque (the approved white-background look)
+                assert 290 <= x <= 525 and 40 <= y <= 262, f"icon pixel changed outside the star tile at {(x, y)}"
+                assert d[3] == 255 and o[3] < 255
+                k = o[3] / 255
+                assert all(abs(d[i] - (o[i] * k + 255 * (1 - k))) <= 1 for i in range(3)), "star pixel is not the approved composite over white"
+                star += 1
+            else:
+                assert d[3] == o[3], f"text pixel alpha changed at {(x, y)}"
+                assert d[:3] in (wordmark, tagline), f"text pixel recoloured to an unexpected colour at {(x, y)}"
+                assert (d[:3] == wordmark) == (100 <= y < 330)
+                recoloured += 1
+    assert 500 < star < 20000 and recoloured > 50000
+    # the saturated pixels of the text area (orange dots, turquoise divider) are untouched
+    kept = 0
+    for y in range(100, 470):
+        for x in range(560, w):
+            o = px(orig, x, y)
+            if o[3] > 200 and colorsys.rgb_to_hsv(*(c / 255 for c in o[:3]))[1] >= 0.6 and max(o[:3]) >= 90:
+                assert px(dark, x, y) == o
+                kept += 1
+    assert kept > 3000
+
+
+def test_the_dark_logo_colours_are_readable_on_the_dark_card():
+    surface = _tokens(CSS.split("@media (prefers-color-scheme: dark)")[1].split("* { box-sizing")[0])["surface"]
+    assert _contrast("#F4F9FA", surface) >= 7.0                  # wordmark
+    assert _contrast("#B9CDD4", surface) >= 4.5                  # tagline

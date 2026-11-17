@@ -154,8 +154,8 @@ p { margin: 0; }
 /* ---------- brand ---------- */
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; color: var(--ink); direction: ltr; unicode-bidi: isolate; }
 .brand-icon { inline-size: 32px; block-size: 32px; flex: none; display: block; }
-/* The approved full logo has a dark wordmark and no reversed version, so it always sits on a white plate (invisible on the white light-mode card). */
-.login-logo { background: #FFFFFF; border-radius: var(--radius-sm); padding: 10px 16px; display: grid; place-items: center; }
+/* Light mode shows the approved full logo as delivered. Dark mode shows full_transparent_dark.png, derived from it by scripts/make_dark_logo.py (light wordmark and tagline; see static/brand/DERIVED.md). */
+.login-logo { display: grid; place-items: center; padding: 10px 16px; }
 .login-logo img { display: block; inline-size: min(100%, 17rem); block-size: auto; }
 
 /* ---------- cards ---------- */

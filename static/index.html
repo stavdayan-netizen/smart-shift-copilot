@@ -47,7 +47,10 @@
   <section id="view-login" class="login" hidden aria-labelledby="login-title">
     <div class="card login-card">
       <header>
-        <div class="login-logo"><img src="/static/brand/full_transparent.png" width="1872" height="538" alt="Shiftimizer, סידור עבודה חכם"></div>
+        <div class="login-logo"><picture>
+          <source srcset="/static/brand/full_transparent_dark.png" media="(prefers-color-scheme: dark)">
+          <img src="/static/brand/full_transparent.png" width="1872" height="538" alt="Shiftimizer, סידור עבודה חכם">
+        </picture></div>
         <div>
           <h1 id="login-title" data-t="login.title"></h1>
           <p class="muted" data-t="login.intro"></p>

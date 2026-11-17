@@ -4,7 +4,7 @@
         --employee-name "דנה" --employee-code XXXXX-XXXXX --out docs/ui-checks/branding
 
 Per viewport (360, 390, 768, 1280) and colour scheme: the full approved logo (with its tagline) loads at its native 1872x538
-on the login screen and fits without overflow; in dark mode it sits on a white plate; after login the header shows the approved
+on the login screen and fits without overflow; there is no plate behind it; in dark mode the browser chooses the derived light-wordmark file (wordmark pixels bright, star still white), in light mode the approved file as delivered; after login the header shows the approved
 icon (loaded, 32 px) and the name "Shiftimizer" for the manager and the employee; the browser title is "Shiftimizer"; every icon
 and manifest URL declared in the page answers 200; the old product name appears nowhere in the visible text; no console errors.
 Reuses the driver of scripts/ui_check.py. Use only against a local or test instance with fictional data.
@@ -27,8 +27,15 @@ LOGIN_PROBE = r"""
 (() => {
   const img = document.querySelector('.login-logo img'), plate = document.querySelector('.login-logo');
   const r = img.getBoundingClientRect(), vw = document.documentElement.clientWidth;
-  return { title: document.title, loaded: img.complete && img.naturalWidth === 1872 && img.naturalHeight === 538, alt: img.alt,
+  // mean brightness of the opaque wordmark pixels (rows 113-319, right of the icon) of the file the browser actually chose
+  const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+  const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+  const d = cx.getImageData(586, 113, 1200, 206).data; let sum = 0, n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 250 && !(d[i] > 200 && d[i + 2] < 120)) { sum += (d[i] + d[i + 1] + d[i + 2]) / 3; n++; }
+  const star = cx.getImageData(405, 150, 1, 1).data;   // the centre of the star
+  return { title: document.title, src: img.currentSrc, loaded: img.complete && img.naturalWidth === 1872 && img.naturalHeight === 538, alt: img.alt,
            width: Math.round(r.width), inside: r.left >= 0 && r.right <= vw, plateBg: getComputedStyle(plate).backgroundColor,
+           wordmarkBrightness: Math.round(sum / Math.max(n, 1)), starAlpha: star[3], starRgb: [star[0], star[1], star[2]],
            text: document.body.innerText, dir: document.documentElement.dir };
 })()
 """
@@ -99,7 +106,12 @@ def main() -> int:
                 check(p["title"] == "Shiftimizer", f"{tag}: title is {p['title']!r}")
                 check(p["loaded"] and "סידור עבודה חכם" in p["alt"], f"{tag}: the full logo did not load at its native size")
                 check(p["inside"] and p["width"] >= 150, f"{tag}: logo width {p['width']} / outside the viewport")
-                check(p["plateBg"] in ("rgb(255, 255, 255)", "rgba(255, 255, 255, 1)"), f"{tag}: logo plate is {p['plateBg']}")
+                check(p["plateBg"] == "rgba(0, 0, 0, 0)", f"{tag}: the logo must sit directly on the card (no plate), background is {p['plateBg']}")
+                if scheme == "dark":
+                    check(p["src"].endswith("/static/brand/full_transparent_dark.png") and p["wordmarkBrightness"] > 200, f"{tag}: dark mode must use the light-wordmark file: {p['src']} brightness {p['wordmarkBrightness']}")
+                    check(p["starAlpha"] == 255 and min(p["starRgb"]) > 240, f"{tag}: the star must stay white on the dark card: {p['starAlpha']} {p['starRgb']}")
+                else:
+                    check(p["src"].endswith("/static/brand/full_transparent.png") and p["wordmarkBrightness"] < 60, f"{tag}: light mode must use the approved file: {p['src']} brightness {p['wordmarkBrightness']}")
                 check("Smart Shift" not in p["text"], f"{tag}: the old name is still visible on the login screen")
                 check(not m["pageOverflowsX"] and not m["elementsWiderThanViewport"] and m["dir"] == "rtl", f"{tag}: login overflow/direction")
                 check(not m["smallTargets"], f"{tag}: small targets on login {m['smallTargets'][:2]}")
