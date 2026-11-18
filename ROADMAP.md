@@ -33,11 +33,25 @@ Smallest viable submission: **M0 + M1 + M2 + D1 + M3 + M4**. If time runs short:
 
 Suggested order: 2 → 3 → 4 → 1. Also future work, not scheduled: legal employment-compliance rules and legal review before any real production use.
 
+## Phase 3 — commercial multi-business SaaS (preliminary, NOT started, added 2026-11-18)
+
+Planning only; requirements are preliminary and detailed design, numeric limits and questionnaire fields are open. Board status: Backlog. The product is single-business today ("Multi-tenant SaaS" below is an MVP exclusion; Phase 3 is the later decision to go beyond it).
+
+| Issue | Content | Depends on | Notes |
+|---|---|---|---|
+| (not yet an issue) Business/tenant foundation | A business entity, per-business data isolation and configuration | Phase 1 core | Prerequisite for #48 and #51; to be scoped as its own issue before Phase 3 starts |
+| #48 P3-1 AI usage and cost controls | Hard monthly AI cap per business, accurate usage/cost tracking (concurrent and multi-step calls), configurable message/output/rate limits, warnings and Hebrew messages, non-AI features stay available; distinct from today's global cap | Tenant foundation; agent loop (#7); relates #12, #15 | **Must be done before any paying customer** |
+| #49 P3-2 Employee roles | Configurable roles, several per employee, role-based staffing requirements in generation and validation | #17, #18, #19, #10, #11 | Extends the "no roles" MVP |
+| #50 P3-3 Scheduling rules and compliance | Configurable constraints (minimum rest first), verified country/jurisdiction rules, business policies, mandatory vs preference | #10, #11, #12, #49; legal review | No legal requirement assumed without verification |
+| #51 P3-4 Business onboarding | Guided setup: roster, roles, shifts, staffing needs, submission times, policies | **#48 first**, #17, #49, #50, tenant foundation | Entry point for paying customers, so blocked by #48 |
+
+Suggested order: tenant foundation → #48 → #49 → #50 → #51 (#49 and #50 can overlap; #48 gates any paying customer and therefore #51).
+
 ## Explicitly excluded (deliberate product boundary, not "unfinished")
 
 - Employee self-service cancellation of published shifts, sickness reporting and no-show reporting through the app. All are handled by telephone with the manager.
 - Real WhatsApp integration.
 - Automatic publishing without manager approval.
 - Replacement-employee approval workflow.
-- Multi-tenant SaaS.
+- Multi-tenant SaaS (a Phase 3 candidate, see above).
 - Night shifts and job roles in the MVP.
