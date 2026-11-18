@@ -57,4 +57,4 @@ The instructor's bakery issue script was removed in M0-1; the GitHub issues are 
 
 ## Phase 3 (preliminary, planning only, added 2026-11-18)
 
-Tracked as GitHub Issues #48 (P3-1 AI usage and cost controls per business), #49 (P3-2 employee roles and role-based staffing), #50 (P3-3 configurable scheduling rules and labor-law compliance) and #51 (P3-4 guided business onboarding); all in Backlog. Dependencies and open decisions are in each issue and summarised in `ROADMAP.md` (Phase 3). #48 must be implemented before any paying customer is onboarded; #51 is blocked by it.
+Tracked as GitHub Issues #53 (P3-0 multi-tenant foundation, the prerequisite of #48 and #51), #48 (P3-1 AI usage and cost controls per business), #49 (P3-2 employee roles and role-based staffing), #50 (P3-3 configurable scheduling rules and labor-law compliance) and #51 (P3-4 guided business onboarding); all in Backlog. Dependencies and open decisions are in each issue and summarised in `ROADMAP.md` (Phase 3). #48 must be implemented before any paying customer is onboarded; #51 is blocked by it.

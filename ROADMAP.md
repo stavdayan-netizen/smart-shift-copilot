@@ -39,13 +39,13 @@ Planning only; requirements are preliminary and detailed design, numeric limits 
 
 | Issue | Content | Depends on | Notes |
 |---|---|---|---|
-| (not yet an issue) Business/tenant foundation | A business entity, per-business data isolation and configuration | Phase 1 core | Prerequisite for #48 and #51; to be scoped as its own issue before Phase 3 starts |
-| #48 P3-1 AI usage and cost controls | Hard monthly AI cap per business, accurate usage/cost tracking (concurrent and multi-step calls), configurable message/output/rate limits, warnings and Hebrew messages, non-AI features stay available; distinct from today's global cap | Tenant foundation; agent loop (#7); relates #12, #15 | **Must be done before any paying customer** |
-| #49 P3-2 Employee roles | Configurable roles, several per employee, role-based staffing requirements in generation and validation | #17, #18, #19, #10, #11 | Extends the "no roles" MVP |
-| #50 P3-3 Scheduling rules and compliance | Configurable constraints (minimum rest first), verified country/jurisdiction rules, business policies, mandatory vs preference | #10, #11, #12, #49; legal review | No legal requirement assumed without verification |
-| #51 P3-4 Business onboarding | Guided setup: roster, roles, shifts, staffing needs, submission times, policies | **#48 first**, #17, #49, #50, tenant foundation | Entry point for paying customers, so blocked by #48 |
+| #53 P3-0 Multi-tenant foundation | Business entities, tenant-scoped data isolation, user/business associations, authorization boundaries (details open) | Phase 1 core (auth #3, audit #2) | **Prerequisite for #48 and #51** (and for the business-level configuration in #49 and #50) |
+| #48 P3-1 AI usage and cost controls | Hard monthly AI cap per business, accurate usage/cost tracking (concurrent and multi-step calls), configurable message/output/rate limits, warnings and Hebrew messages, non-AI features stay available; distinct from today's global cap | **#53**; agent loop (#7); relates #12, #15 | **Must be done before any paying customer** |
+| #49 P3-2 Employee roles | Configurable roles, several per employee, role-based staffing requirements in generation and validation | #53 (business-level configuration), #17, #18, #19, #10, #11 | Extends the "no roles" MVP |
+| #50 P3-3 Scheduling rules and compliance | Configurable constraints (minimum rest first), verified country/jurisdiction rules, business policies, mandatory vs preference | #53 (business-level configuration), #10, #11, #12, #49; legal review | No legal requirement assumed without verification |
+| #51 P3-4 Business onboarding | Guided setup: roster, roles, shifts, staffing needs, submission times, policies | **#53 and #48 first**, #17, #49, #50 | Entry point for paying customers, so blocked by #48 |
 
-Suggested order: tenant foundation → #48 → #49 → #50 → #51 (#49 and #50 can overlap; #48 gates any paying customer and therefore #51).
+Suggested order: #53 (tenant foundation) → #48 → #49 → #50 → #51 (#49 and #50 can overlap; #53 is the prerequisite of #48 and #51, and #48 gates any paying customer and therefore #51).
 
 ## Explicitly excluded (deliberate product boundary, not "unfinished")
 
